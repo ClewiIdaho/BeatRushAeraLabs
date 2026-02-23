@@ -31,10 +31,10 @@ const ARROW_ROT = [-Math.PI / 2, 0, Math.PI, Math.PI / 2];
 
 // Background elements (generated once)
 const stars = [];
-for (let i = 0; i < 150; i++) {
+for (let i = 0; i < 120; i++) {
   stars.push({
     x: Math.random(), y: Math.random(),
-    sz: 0.2 + Math.random() * 2,
+    sz: 0.2 + Math.random() * 1.8,
     spd: 0.15 + Math.random() * 0.6,
     hue: Math.random() * 360,
     tw: 0.8 + Math.random() * 3,
@@ -42,13 +42,31 @@ for (let i = 0; i < 150; i++) {
   });
 }
 const nebulae = [];
-for (let i = 0; i < 8; i++) {
+for (let i = 0; i < 6; i++) {
   nebulae.push({
     x: 0.1 + Math.random() * 0.8, y: 0.05 + Math.random() * 0.5,
     r: 0.08 + Math.random() * 0.18,
-    hue: [200, 280, 320, 180, 260, 300, 220, 340][i],
+    hue: [200, 280, 320, 180, 260, 300][i],
     dr: 0.3 + Math.random() * 0.5,
     ph: Math.random() * Math.PI * 2,
+  });
+}
+
+// Floating background arrows (lobby decoration)
+const bgArrows = [];
+for (let i = 0; i < 42; i++) {
+  bgArrows.push({
+    x0: Math.random(),
+    y0: Math.random(),
+    sz: 5 + Math.random() * 32,
+    baseRot: Math.random() * Math.PI * 2,
+    rotSpd: (Math.random() - 0.5) * 0.25,
+    dx: (Math.random() - 0.5) * 0.025,
+    dy: -(0.015 + Math.random() * 0.05),
+    lane: Math.floor(Math.random() * 4),
+    alpha: 0.015 + Math.random() * 0.06,
+    phase: Math.random() * Math.PI * 2,
+    wobble: 0.3 + Math.random() * 0.8,
   });
 }
 
@@ -304,6 +322,50 @@ export class Renderer {
     ctx.restore();
   }
 
+  // ── Floating arrows (lobby background decoration) ─────────
+
+  drawFloatingArrows(ctx, W, H, t) {
+    const ts = t * 0.001;
+    for (const a of bgArrows) {
+      // Linear drift + gentle sine wobble, wrapped
+      let px = a.x0 + a.dx * ts + Math.sin(ts * 0.4 + a.phase) * 0.015 * a.wobble;
+      let py = a.y0 + a.dy * ts + Math.cos(ts * 0.25 + a.phase * 1.7) * 0.008;
+
+      // Wrap so arrows loop endlessly
+      px = ((px % 1.4) + 1.4) % 1.4 - 0.2;
+      py = ((py % 1.4) + 1.4) % 1.4 - 0.2;
+
+      const sx = px * W;
+      const sy = py * H;
+      const rot = a.baseRot + a.rotSpd * ts;
+      const pulse = 0.4 + 0.6 * Math.sin(ts * 1.0 + a.phase);
+
+      ctx.save();
+      ctx.globalAlpha = a.alpha * pulse;
+      ctx.translate(sx, sy);
+      ctx.rotate(rot);
+
+      if (a.sz < 14) {
+        this._arrowPathSmall(ctx, a.sz);
+      } else {
+        this._arrowPath(ctx, a.sz);
+      }
+
+      ctx.fillStyle = COLS[a.lane];
+      ctx.shadowColor = COLS[a.lane];
+      ctx.shadowBlur = a.sz * 0.5;
+      ctx.fill();
+
+      // Faint edge
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
   // ── Background loop (menu/results) ────────────────────────
 
   drawBGLoop() {
@@ -312,7 +374,9 @@ export class Renderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = this.bgCv.width / dpr;
     const H = this.bgCv.height / dpr;
-    this.drawBackground(ctx, W, H, performance.now(), 0.8);
+    const t = performance.now();
+    this.drawBackground(ctx, W, H, t, 0.8);
+    this.drawFloatingArrows(ctx, W, H, t);
   }
 
   // ── Highway (3D perspective) ──────────────────────────────
