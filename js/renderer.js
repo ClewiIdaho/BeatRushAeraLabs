@@ -130,46 +130,59 @@ export class Renderer {
     ctx.translate(x, y);
     ctx.rotate(ARROW_ROT[lane]);
 
-    // Outer neon glow
+    // Outer neon glow (stronger)
     if (glowIntensity > 0) {
       ctx.shadowColor = c;
-      ctx.shadowBlur = 12 + glowIntensity * 22;
+      ctx.shadowBlur = 16 + glowIntensity * 28;
     }
 
-    // Build path (simplified at small sizes for readability)
+    // Build path
     if (sz < 16) {
       this._arrowPathSmall(ctx, sz);
     } else {
       this._arrowPath(ctx, sz);
     }
 
-    // Main gradient fill (glassmorphic: lighter center, darker edges)
+    // Main gradient fill (glassmorphic: richer depth)
     const hw = sz * 0.44;
     const grad = ctx.createLinearGradient(-hw, -hw, hw, hw);
     grad.addColorStop(0, c2);
-    grad.addColorStop(0.3, c);
-    grad.addColorStop(0.7, cg);
+    grad.addColorStop(0.25, c);
+    grad.addColorStop(0.5, cg);
+    grad.addColorStop(0.75, c);
     grad.addColorStop(1, c2);
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Glass highlight on upper portion
+    // Glass highlights (glossy layered reflections)
     if (sz >= 16) {
       ctx.save();
       ctx.clip();
-      const hl = ctx.createLinearGradient(0, -sz / 2, 0, 0);
-      hl.addColorStop(0, 'rgba(255,255,255,0.42)');
-      hl.addColorStop(0.45, 'rgba(255,255,255,0.12)');
+
+      // Top glass highlight (bright specular)
+      const hl = ctx.createLinearGradient(0, -sz / 2, 0, sz * 0.1);
+      hl.addColorStop(0, 'rgba(255,255,255,0.55)');
+      hl.addColorStop(0.3, 'rgba(255,255,255,0.22)');
+      hl.addColorStop(0.6, 'rgba(255,255,255,0.06)');
       hl.addColorStop(1, 'transparent');
       ctx.fillStyle = hl;
-      ctx.fillRect(-sz, -sz, sz * 2, sz);
+      ctx.fillRect(-sz, -sz, sz * 2, sz * 1.1);
+
+      // Bottom glass rim light
+      const bl = ctx.createLinearGradient(0, 0, 0, sz / 2);
+      bl.addColorStop(0, 'transparent');
+      bl.addColorStop(0.7, 'rgba(255,255,255,0.03)');
+      bl.addColorStop(1, 'rgba(255,255,255,0.1)');
+      ctx.fillStyle = bl;
+      ctx.fillRect(-sz, 0, sz * 2, sz);
+
       ctx.restore();
     }
 
-    // Crisp border
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.lineWidth = 1.5;
+    // Crisp glowing border
+    ctx.shadowBlur = glowIntensity > 0.3 ? 4 : 0;
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + glowIntensity * 0.2})`;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
     ctx.restore();
@@ -179,11 +192,12 @@ export class Renderer {
 
   drawTargetArrow(ctx, x, y, lane, flash, t) {
     const c = COLS[lane];
-    const sz = 30;
+    const cg = COLSG[lane];
+    const sz = 38;
 
     // Constant subtle idle pulse
-    const pulse = 0.15 + Math.sin(t * 0.004 + lane * 1.5) * 0.06;
-    const scale = 1 + flash * 0.15;
+    const pulse = 0.18 + Math.sin(t * 0.004 + lane * 1.5) * 0.08;
+    const scale = 1 + flash * 0.18;
 
     ctx.save();
     ctx.translate(x, y);
@@ -195,22 +209,40 @@ export class Renderer {
     if (flash > 0.05) {
       // Bright fill on hit
       ctx.fillStyle = c;
-      ctx.globalAlpha = 0.25 + flash * 0.75;
+      ctx.globalAlpha = 0.3 + flash * 0.7;
       ctx.shadowColor = c;
-      ctx.shadowBlur = 20 + flash * 25;
+      ctx.shadowBlur = 24 + flash * 30;
       ctx.fill();
     } else {
-      // Faint glass fill
-      ctx.fillStyle = c;
-      ctx.globalAlpha = 0.03;
+      // Glass fill with subtle gradient
+      const tg = ctx.createLinearGradient(0, -sz / 2, 0, sz / 2);
+      tg.addColorStop(0, c);
+      tg.addColorStop(0.5, cg);
+      tg.addColorStop(1, c);
+      ctx.fillStyle = tg;
+      ctx.globalAlpha = 0.06 + pulse * 0.04;
       ctx.fill();
+
+      // Glass highlight on upper half
+      ctx.save();
+      ctx.clip();
+      const hl = ctx.createLinearGradient(0, -sz / 2, 0, 0);
+      hl.addColorStop(0, 'rgba(255,255,255,0.15)');
+      hl.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+      hl.addColorStop(1, 'transparent');
+      ctx.fillStyle = hl;
+      ctx.globalAlpha = pulse + 0.1;
+      ctx.fillRect(-sz, -sz, sz * 2, sz);
+      ctx.restore();
     }
 
-    // Border (always visible)
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = pulse + flash * 0.6 + 0.12;
+    // Border (always visible, glowing)
+    this._arrowPath(ctx, sz);
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 6 + pulse * 4;
+    ctx.globalAlpha = pulse + flash * 0.6 + 0.15;
     ctx.strokeStyle = c;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
     ctx.restore();
@@ -218,13 +250,13 @@ export class Renderer {
     // Radial flash glow
     if (flash > 0.05) {
       ctx.save();
-      ctx.globalAlpha = flash * 0.6;
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 70);
-      g.addColorStop(0, c + '66');
-      g.addColorStop(0.4, c + '22');
+      ctx.globalAlpha = flash * 0.65;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 80);
+      g.addColorStop(0, c + '77');
+      g.addColorStop(0.35, c + '33');
       g.addColorStop(1, 'transparent');
       ctx.fillStyle = g;
-      ctx.fillRect(x - 70, y - 70, 140, 140);
+      ctx.fillRect(x - 80, y - 80, 160, 160);
       ctx.restore();
     }
   }
@@ -385,8 +417,8 @@ export class Renderer {
     const cx = W / 2;
     const vy = H * 0.04;
     const hy = H * 0.82;
-    const tw = W * 0.055;
-    const bw = W * 0.35;
+    const tw = W * 0.04;
+    const bw = W * 0.28;
     const hl = hy - vy;
     const bp = beatPulse;
     const bassE = energy.bass || 0;
@@ -401,11 +433,11 @@ export class Renderer {
     ctx.closePath();
     ctx.shadowColor = hsl(260, 100, 60, 0.5 + bp * 0.4 + bassE * 0.3);
     ctx.shadowBlur = 50 + bp * 30 + bassE * 20;
-    ctx.fillStyle = 'rgba(3,1,15,0.97)';
+    ctx.fillStyle = 'rgba(3,1,15,0.95)';
     ctx.fill();
     ctx.restore();
 
-    // Highway surface
+    // Highway surface (glassmorphic)
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(cx - tw, vy);
@@ -414,46 +446,67 @@ export class Renderer {
     ctx.lineTo(cx - bw, hy);
     ctx.closePath();
     const hg = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
-    hg.addColorStop(0, 'rgba(12,5,40,0.97)');
-    hg.addColorStop(0.5, `rgba(${16 + bp * 20 + bassE * 12},${8 + bp * 12},${50 + bp * 25},0.96)`);
-    hg.addColorStop(1, 'rgba(12,5,40,0.97)');
+    hg.addColorStop(0, 'rgba(15,8,50,0.88)');
+    hg.addColorStop(0.15, 'rgba(10,5,35,0.92)');
+    hg.addColorStop(0.5, `rgba(${14 + bp * 18 + bassE * 10},${6 + bp * 10},${45 + bp * 22},0.90)`);
+    hg.addColorStop(0.85, 'rgba(10,5,35,0.92)');
+    hg.addColorStop(1, 'rgba(15,8,50,0.88)');
     ctx.fillStyle = hg;
     ctx.fill();
 
-    // Surface sheen (top)
+    // Glass top sheen (bright reflection at vanishing point)
     ctx.save();
     ctx.clip();
-    const gl = ctx.createLinearGradient(0, vy, 0, vy + hl * 0.2);
-    gl.addColorStop(0, 'rgba(120,80,255,0.05)');
+    const gl = ctx.createLinearGradient(0, vy, 0, vy + hl * 0.25);
+    gl.addColorStop(0, 'rgba(140,100,255,0.1)');
+    gl.addColorStop(0.3, 'rgba(100,60,255,0.04)');
     gl.addColorStop(1, 'transparent');
     ctx.fillStyle = gl;
-    ctx.fillRect(cx - bw, vy, bw * 2, hl * 0.2);
+    ctx.fillRect(cx - bw, vy, bw * 2, hl * 0.25);
+
+    // Glass bottom glow near hit zone
+    const bl = ctx.createLinearGradient(0, hy - hl * 0.15, 0, hy);
+    bl.addColorStop(0, 'transparent');
+    bl.addColorStop(0.5, 'rgba(0,240,255,0.02)');
+    bl.addColorStop(1, `rgba(0,240,255,${0.04 + bp * 0.04})`);
+    ctx.fillStyle = bl;
+    ctx.fillRect(cx - bw, hy - hl * 0.15, bw * 2, hl * 0.15);
+
+    // Subtle inner edge highlights (glass refraction)
+    const el = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
+    el.addColorStop(0, 'rgba(255,255,255,0.04)');
+    el.addColorStop(0.03, 'transparent');
+    el.addColorStop(0.97, 'transparent');
+    el.addColorStop(1, 'rgba(255,255,255,0.04)');
+    ctx.fillStyle = el;
+    ctx.fillRect(cx - bw, vy, bw * 2, hl);
     ctx.restore();
     ctx.restore();
 
-    // Edge neon borders
+    // Edge neon borders (bright glass edges)
     for (let s = -1; s <= 1; s += 2) {
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(cx + s * tw, vy);
       ctx.lineTo(cx + s * bw, hy);
       const ec = ctx.createLinearGradient(0, vy, 0, hy);
-      ec.addColorStop(0, hsl(280, 100, 60, 0.15));
-      ec.addColorStop(0.5, hsl(200, 100, 60, 0.45 + bp * 0.3));
-      ec.addColorStop(1, hsl(180, 100, 60, 0.55 + bp * 0.3));
+      ec.addColorStop(0, hsl(280, 100, 65, 0.2));
+      ec.addColorStop(0.3, hsl(220, 100, 65, 0.4 + bp * 0.25));
+      ec.addColorStop(0.6, hsl(200, 100, 65, 0.5 + bp * 0.3));
+      ec.addColorStop(1, hsl(180, 100, 65, 0.6 + bp * 0.3));
       ctx.strokeStyle = ec;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2;
       ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 14 + bp * 10;
+      ctx.shadowBlur = 16 + bp * 12;
       ctx.stroke();
       ctx.restore();
 
-      // Feathered bloom
+      // Feathered bloom (inner glow)
       ctx.beginPath();
       ctx.moveTo(cx + s * tw, vy);
       ctx.lineTo(cx + s * bw, hy);
-      ctx.strokeStyle = 'rgba(0,240,255,0.03)';
-      ctx.lineWidth = 14;
+      ctx.strokeStyle = 'rgba(0,240,255,0.04)';
+      ctx.lineWidth = 18;
       ctx.stroke();
     }
 
@@ -546,7 +599,7 @@ export class Renderer {
       const w = lerp(tw, bw, pp);
       const lw = (w * 2) / 4;
       const nx = cx - w + n.lane * lw + lw / 2;
-      const sz = 10 + 26 * pp;
+      const sz = 14 + 32 * pp;
 
       // Glow intensifies as note approaches hit zone
       const glowI = Math.pow(pp, 2);
@@ -557,12 +610,13 @@ export class Renderer {
       // Note trail (light streak behind the arrow)
       if (pp > 0.1) {
         ctx.save();
-        ctx.globalAlpha = pp * 0.22;
-        const tg = ctx.createLinearGradient(0, y - 40 * pp, 0, y);
+        ctx.globalAlpha = pp * 0.28;
+        const tg = ctx.createLinearGradient(0, y - 50 * pp, 0, y);
         tg.addColorStop(0, 'transparent');
+        tg.addColorStop(0.7, COLS[n.lane] + '44');
         tg.addColorStop(1, COLS[n.lane]);
         ctx.fillStyle = tg;
-        ctx.fillRect(nx - 3.5 * pp, y - 40 * pp, 7 * pp, 40 * pp);
+        ctx.fillRect(nx - 4 * pp, y - 50 * pp, 8 * pp, 50 * pp);
         ctx.restore();
       }
 

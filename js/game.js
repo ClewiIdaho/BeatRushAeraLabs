@@ -440,7 +440,7 @@ export class Game {
       const dpr = window.devicePixelRatio || 1;
       const W = this.dom.gameCv.width / dpr;
       const H = this.dom.gameCv.height / dpr;
-      const cx = W / 2, hy = H * 0.82, bw = W * 0.35;
+      const cx = W / 2, hy = H * 0.82, bw = W * 0.28;
       const lw = (bw * 2) / 4;
       const px = cx - bw + lane * lw + lw / 2;
 
