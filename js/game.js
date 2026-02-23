@@ -249,9 +249,14 @@ export class Game {
       await new Promise(r => setTimeout(r, 400));
       this.startGame(song);
     } catch (err) {
-      console.error('Failed to load song:', err);
-      this.dom.loadingText.textContent = 'LOAD FAILED \u2014 CLICK TO RETRY';
-      this.dom.loadingScreen.addEventListener('click', () => this.showSongSelect(), { once: true });
+      console.error('Failed to load song:', song.title, err);
+      this.dom.loadingText.textContent = 'LOAD FAILED \u2014 TAP OR PRESS ANY KEY';
+      const goBack = () => {
+        window.removeEventListener('keydown', goBack);
+        this.showSongSelect();
+      };
+      this.dom.loadingScreen.addEventListener('click', goBack, { once: true });
+      window.addEventListener('keydown', goBack, { once: true });
     }
   }
 
@@ -403,7 +408,7 @@ export class Game {
       const dpr = window.devicePixelRatio || 1;
       const W = this.dom.gameCv.width / dpr;
       const H = this.dom.gameCv.height / dpr;
-      const cx = W / 2, hy = H * 0.82, bw = W * 0.3;
+      const cx = W / 2, hy = H * 0.82, bw = W * 0.35;
       const lw = (bw * 2) / 4;
       const px = cx - bw + lane * lw + lw / 2;
 
@@ -462,48 +467,53 @@ export class Game {
     }
 
     // ── Render ──────────────────────────────────────────────
-    const ctx = this.dom.gameCv.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const W = this.dom.gameCv.width / dpr;
-    const H = this.dom.gameCv.height / dpr;
+    try {
+      const ctx = this.dom.gameCv.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const W = this.dom.gameCv.width / dpr;
+      const H = this.dom.gameCv.height / dpr;
+      ctx.clearRect(0, 0, W, H);
 
-    // Screen shake
-    if (this.effects.screenShake.intensity > 0) {
-      ctx.translate(this.effects.screenShake.x, this.effects.screenShake.y);
+      // Screen shake
+      if (this.effects.screenShake.intensity > 0) {
+        ctx.translate(this.effects.screenShake.x, this.effects.screenShake.y);
+      }
+
+      const energy = this.audio.getEnergy();
+
+      // Background
+      this.renderer.drawBackground(ctx, W, H, now, 0.6 + gd.beatPulse * 0.4);
+
+      // Screen flash
+      this.effects.drawScreenFlash(ctx, W, H);
+
+      // Highway
+      const hw = this.renderer.drawHighway(ctx, W, H, now, gd.beatPulse, energy, this.effects);
+
+      // Target arrows (pass time for idle pulse)
+      this.renderer.drawTargets(ctx, hw, this.effects.laneFlashes, now);
+
+      // Rings
+      this.effects.drawRings(ctx, now);
+
+      // Notes
+      this.renderer.drawNotes(ctx, gd.notes, elapsed, TRAVEL, hw);
+
+      // Particles
+      this.effects.drawParticles(ctx, now);
+
+      // Judgment text
+      this.renderer.drawJudgment(ctx, gd.judg, gd.judgT, now, hw.cx, hw.hy);
+
+      // HUD
+      this.renderer.drawHUD(ctx, W, H, gd, hw);
+
+      // Song title
+      this.renderer.drawSongTitle(ctx, W, gd.song.title, elapsed);
+    } catch(e) {
+      console.error('Render error:', e);
     }
-
-    const energy = this.audio.getEnergy();
-
-    // Background
-    this.renderer.drawBackground(ctx, W, H, now, 0.6 + gd.beatPulse * 0.4);
-
-    // Screen flash
-    this.effects.drawScreenFlash(ctx, W, H);
-
-    // Highway
-    const hw = this.renderer.drawHighway(ctx, W, H, now, gd.beatPulse, energy, this.effects);
-
-    // Target arrows (pass time for idle pulse)
-    this.renderer.drawTargets(ctx, hw, this.effects.laneFlashes, now);
-
-    // Rings
-    this.effects.drawRings(ctx, now);
-
-    // Notes
-    this.renderer.drawNotes(ctx, gd.notes, elapsed, TRAVEL, hw);
-
-    // Particles
-    this.effects.drawParticles(ctx, now);
-
-    // Judgment text
-    this.renderer.drawJudgment(ctx, gd.judg, gd.judgT, now, hw.cx, hw.hy);
-
-    // HUD
-    this.renderer.drawHUD(ctx, W, H, gd, hw);
-
-    // Song title
-    this.renderer.drawSongTitle(ctx, W, gd.song.title, elapsed);
 
     this._gameAF = requestAnimationFrame(() => this.gameLoop());
   }
