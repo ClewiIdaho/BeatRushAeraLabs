@@ -91,9 +91,9 @@ canvas { display: block; }
 
 .lobby-title {
   font-family: var(--font-heading);
-  font-size: clamp(28px, 5vw, 48px);
+  font-size: clamp(40px, 8vw, 72px);
   font-weight: 900;
-  letter-spacing: 14px;
+  letter-spacing: 18px;
   line-height: 1;
   background: linear-gradient(135deg, #fff 0%, var(--cyan) 40%, var(--magenta) 70%, var(--purple) 100%);
   background-size: 300% 300%;
@@ -109,10 +109,10 @@ canvas { display: block; }
 
 .lobby-sub {
   font-family: var(--font-body);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 300;
-  letter-spacing: 6px;
-  margin-top: 8px;
+  letter-spacing: 8px;
+  margin-top: 10px;
   color: rgba(255,255,255,0.25);
   animation: headerEntrance 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.15s both;
 }
@@ -120,22 +120,22 @@ canvas { display: block; }
 /* ── Centered Glass Panel ──────────────────────────────────── */
 .lobby-panel {
   width: 100%;
-  max-width: 500px;
-  max-height: 60vh;
+  max-width: 440px;
+  max-height: 48vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: rgba(8, 5, 25, 0.55);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 18px;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(6, 4, 20, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   box-shadow:
-    0 8px 40px rgba(0,0,0,.35),
+    0 8px 40px rgba(0,0,0,.5),
     0 0 60px rgba(0,240,255,.04),
-    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 1px 0 rgba(255,255,255,.07),
     inset 0 -1px 0 rgba(255,255,255,.02);
-  padding: 14px 16px;
+  padding: 12px 14px;
   animation: panelEntrance 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
 }
 
