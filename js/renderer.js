@@ -1,6 +1,22 @@
 // ── Renderer ──────────────────────────────────────────────────
 // All canvas drawing: background, highway, arrow notes, HUD, effects
 
+// roundRect polyfill for older browsers
+if (typeof CanvasRenderingContext2D !== 'undefined' &&
+    !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+    const r = typeof radii === 'number' ? radii : (Array.isArray(radii) ? radii[0] : 0);
+    if (r <= 0 || w <= 0 || h <= 0) { this.rect(x, y, w, h); return; }
+    const mr = Math.min(r, w / 2, h / 2);
+    this.moveTo(x + mr, y);
+    this.arcTo(x + w, y, x + w, y + h, mr);
+    this.arcTo(x + w, y + h, x, y + h, mr);
+    this.arcTo(x, y + h, x, y, mr);
+    this.arcTo(x, y, x + w, y, mr);
+    this.closePath();
+  };
+}
+
 import { lerp, hsl, clamp } from './utils.js';
 
 // Lane colors: cyan, magenta, green, amber
@@ -145,7 +161,7 @@ export class Renderer {
 
   drawTargetArrow(ctx, x, y, lane, flash, t) {
     const c = COLS[lane];
-    const sz = 24;
+    const sz = 30;
 
     // Constant subtle idle pulse
     const pulse = 0.15 + Math.sin(t * 0.004 + lane * 1.5) * 0.06;
@@ -305,8 +321,8 @@ export class Renderer {
     const cx = W / 2;
     const vy = H * 0.04;
     const hy = H * 0.82;
-    const tw = W * 0.035;
-    const bw = W * 0.3;
+    const tw = W * 0.055;
+    const bw = W * 0.35;
     const hl = hy - vy;
     const bp = beatPulse;
     const bassE = energy.bass || 0;
@@ -334,9 +350,9 @@ export class Renderer {
     ctx.lineTo(cx - bw, hy);
     ctx.closePath();
     const hg = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
-    hg.addColorStop(0, 'rgba(8,3,30,0.97)');
-    hg.addColorStop(0.5, `rgba(${10 + bp * 15 + bassE * 8},${4 + bp * 8},${35 + bp * 20},0.96)`);
-    hg.addColorStop(1, 'rgba(8,3,30,0.97)');
+    hg.addColorStop(0, 'rgba(12,5,40,0.97)');
+    hg.addColorStop(0.5, `rgba(${16 + bp * 20 + bassE * 12},${8 + bp * 12},${50 + bp * 25},0.96)`);
+    hg.addColorStop(1, 'rgba(12,5,40,0.97)');
     ctx.fillStyle = hg;
     ctx.fill();
 
@@ -415,7 +431,7 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // Lane dividers (faint glowing lines)
+    // Lane dividers (visible glowing lines)
     for (let i = 1; i < 4; i++) {
       const f = i / 4;
       ctx.save();
@@ -423,11 +439,12 @@ export class Renderer {
       ctx.moveTo(cx - tw + f * tw * 2, vy);
       ctx.lineTo(cx - bw + f * bw * 2, hy);
       const lc = ctx.createLinearGradient(0, vy, 0, hy);
-      lc.addColorStop(0, hsl(260, 50, 50, 0.02));
-      lc.addColorStop(0.5, hsl(260, 50, 50, 0.08));
-      lc.addColorStop(1, hsl(260, 50, 50, 0.06));
+      lc.addColorStop(0, hsl(260, 60, 55, 0.04));
+      lc.addColorStop(0.4, hsl(260, 60, 55, 0.14));
+      lc.addColorStop(0.8, hsl(260, 60, 55, 0.12));
+      lc.addColorStop(1, hsl(260, 60, 55, 0.08));
       ctx.strokeStyle = lc;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.stroke();
       ctx.restore();
     }
@@ -465,7 +482,7 @@ export class Renderer {
       const w = lerp(tw, bw, pp);
       const lw = (w * 2) / 4;
       const nx = cx - w + n.lane * lw + lw / 2;
-      const sz = 9 + 22 * pp;
+      const sz = 10 + 26 * pp;
 
       // Glow intensifies as note approaches hit zone
       const glowI = Math.pow(pp, 2);

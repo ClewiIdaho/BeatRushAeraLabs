@@ -46,15 +46,26 @@ export class AudioManager {
     }
   }
 
-  // Load an MP3 from URL with progress callback
+  // Load an MP3 from URL with progress callback (with retry)
   async loadSong(url, onProgress) {
     this.init();
     await this.resume();
     this.stop();
     this.buffer = null;
 
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to load: ${response.status}`);
+    let response = null;
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await fetch(url);
+        if (response.ok) break;
+        lastErr = new Error(`HTTP ${response.status}`);
+      } catch(e) {
+        lastErr = e;
+      }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+    if (!response || !response.ok) throw lastErr || new Error('Failed to load song');
 
     const contentLength = +response.headers.get('Content-Length') || 0;
     const reader = response.body.getReader();
