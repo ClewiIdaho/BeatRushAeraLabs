@@ -136,11 +136,9 @@ export class Renderer {
     ctx.translate(x, y);
     ctx.rotate(ARROW_ROT[lane]);
 
-    // Outer neon glow (stronger)
-    if (glowIntensity > 0) {
-      ctx.shadowColor = c;
-      ctx.shadowBlur = 16 + glowIntensity * 28;
-    }
+    // Outer neon glow (intense bloom)
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 20 + glowIntensity * 40;
 
     // Build path
     if (sz < 16) {
@@ -149,36 +147,49 @@ export class Renderer {
       this._arrowPath(ctx, sz);
     }
 
-    // Main gradient fill (glassmorphic: richer depth)
+    // Main gradient fill (rich glassmorphic depth)
     const hw = sz * 0.44;
     const grad = ctx.createLinearGradient(-hw, -hw, hw, hw);
     grad.addColorStop(0, c2);
-    grad.addColorStop(0.25, c);
-    grad.addColorStop(0.5, cg);
-    grad.addColorStop(0.75, c);
+    grad.addColorStop(0.2, c);
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(0.8, c);
     grad.addColorStop(1, c2);
     ctx.fillStyle = grad;
     ctx.fill();
 
+    // Second pass glow layer for extra bloom
+    ctx.shadowBlur = 30 + glowIntensity * 50;
+    ctx.fill();
+
     // Glass highlights (glossy layered reflections)
-    if (sz >= 16) {
+    if (sz >= 14) {
       ctx.save();
       ctx.clip();
 
-      // Top glass highlight (bright specular)
-      const hl = ctx.createLinearGradient(0, -sz / 2, 0, sz * 0.1);
-      hl.addColorStop(0, 'rgba(255,255,255,0.55)');
-      hl.addColorStop(0.3, 'rgba(255,255,255,0.22)');
-      hl.addColorStop(0.6, 'rgba(255,255,255,0.06)');
+      // Top glass highlight (bright specular shine)
+      const hl = ctx.createLinearGradient(0, -sz / 2, 0, sz * 0.15);
+      hl.addColorStop(0, 'rgba(255,255,255,0.75)');
+      hl.addColorStop(0.2, 'rgba(255,255,255,0.45)');
+      hl.addColorStop(0.5, 'rgba(255,255,255,0.12)');
       hl.addColorStop(1, 'transparent');
       ctx.fillStyle = hl;
-      ctx.fillRect(-sz, -sz, sz * 2, sz * 1.1);
+      ctx.shadowBlur = 0;
+      ctx.fillRect(-sz, -sz, sz * 2, sz * 1.2);
+
+      // Center hot-spot (glass refraction)
+      const hs = ctx.createRadialGradient(0, -sz * 0.15, 0, 0, -sz * 0.15, sz * 0.5);
+      hs.addColorStop(0, 'rgba(255,255,255,0.3)');
+      hs.addColorStop(0.4, 'rgba(255,255,255,0.08)');
+      hs.addColorStop(1, 'transparent');
+      ctx.fillStyle = hs;
+      ctx.fillRect(-sz, -sz, sz * 2, sz * 2);
 
       // Bottom glass rim light
       const bl = ctx.createLinearGradient(0, 0, 0, sz / 2);
       bl.addColorStop(0, 'transparent');
-      bl.addColorStop(0.7, 'rgba(255,255,255,0.03)');
-      bl.addColorStop(1, 'rgba(255,255,255,0.1)');
+      bl.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+      bl.addColorStop(1, 'rgba(255,255,255,0.18)');
       ctx.fillStyle = bl;
       ctx.fillRect(-sz, 0, sz * 2, sz);
 
@@ -186,9 +197,10 @@ export class Renderer {
     }
 
     // Crisp glowing border
-    ctx.shadowBlur = glowIntensity > 0.3 ? 4 : 0;
-    ctx.strokeStyle = `rgba(255,255,255,${0.35 + glowIntensity * 0.2})`;
-    ctx.lineWidth = 1.8;
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 8 + glowIntensity * 12;
+    ctx.strokeStyle = `rgba(255,255,255,${0.5 + glowIntensity * 0.3})`;
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
     ctx.restore();
@@ -199,7 +211,7 @@ export class Renderer {
   drawTargetArrow(ctx, x, y, lane, flash, t) {
     const c = COLS[lane];
     const cg = COLSG[lane];
-    const sz = 38;
+    const sz = 58;
 
     // Constant subtle idle pulse
     const pulse = 0.18 + Math.sin(t * 0.004 + lane * 1.5) * 0.08;
@@ -213,42 +225,48 @@ export class Renderer {
     this._arrowPath(ctx, sz);
 
     if (flash > 0.05) {
-      // Bright fill on hit
+      // Bright fill on hit — intense bloom
       ctx.fillStyle = c;
-      ctx.globalAlpha = 0.3 + flash * 0.7;
+      ctx.globalAlpha = 0.5 + flash * 0.5;
       ctx.shadowColor = c;
-      ctx.shadowBlur = 24 + flash * 30;
+      ctx.shadowBlur = 35 + flash * 45;
       ctx.fill();
+      ctx.fill(); // double pass for extra bloom
     } else {
-      // Glass fill with subtle gradient
+      // Glass fill — visible idle state with glossy gradient
       const tg = ctx.createLinearGradient(0, -sz / 2, 0, sz / 2);
       tg.addColorStop(0, c);
-      tg.addColorStop(0.5, cg);
+      tg.addColorStop(0.35, cg);
+      tg.addColorStop(0.65, '#ffffff');
       tg.addColorStop(1, c);
       ctx.fillStyle = tg;
-      ctx.globalAlpha = 0.06 + pulse * 0.04;
+      ctx.globalAlpha = 0.12 + pulse * 0.08;
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 18 + pulse * 10;
       ctx.fill();
 
-      // Glass highlight on upper half
+      // Glass highlight on upper half (bright specular)
       ctx.save();
       ctx.clip();
-      const hl = ctx.createLinearGradient(0, -sz / 2, 0, 0);
-      hl.addColorStop(0, 'rgba(255,255,255,0.15)');
-      hl.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+      const hl = ctx.createLinearGradient(0, -sz / 2, 0, sz * 0.1);
+      hl.addColorStop(0, 'rgba(255,255,255,0.35)');
+      hl.addColorStop(0.3, 'rgba(255,255,255,0.12)');
+      hl.addColorStop(0.6, 'rgba(255,255,255,0.03)');
       hl.addColorStop(1, 'transparent');
       ctx.fillStyle = hl;
-      ctx.globalAlpha = pulse + 0.1;
+      ctx.globalAlpha = pulse + 0.2;
+      ctx.shadowBlur = 0;
       ctx.fillRect(-sz, -sz, sz * 2, sz);
       ctx.restore();
     }
 
-    // Border (always visible, glowing)
+    // Border (always visible, brighter glow)
     this._arrowPath(ctx, sz);
     ctx.shadowColor = c;
-    ctx.shadowBlur = 6 + pulse * 4;
-    ctx.globalAlpha = pulse + flash * 0.6 + 0.15;
+    ctx.shadowBlur = 12 + pulse * 8 + flash * 20;
+    ctx.globalAlpha = pulse + flash * 0.6 + 0.3;
     ctx.strokeStyle = c;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.8;
     ctx.stroke();
 
     ctx.restore();
@@ -256,13 +274,14 @@ export class Renderer {
     // Radial flash glow
     if (flash > 0.05) {
       ctx.save();
-      ctx.globalAlpha = flash * 0.65;
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 80);
-      g.addColorStop(0, c + '77');
-      g.addColorStop(0.35, c + '33');
+      ctx.globalAlpha = flash * 0.75;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 110);
+      g.addColorStop(0, c + '99');
+      g.addColorStop(0.3, c + '55');
+      g.addColorStop(0.6, c + '22');
       g.addColorStop(1, 'transparent');
       ctx.fillStyle = g;
-      ctx.fillRect(x - 80, y - 80, 160, 160);
+      ctx.fillRect(x - 110, y - 110, 220, 220);
       ctx.restore();
     }
   }
@@ -641,7 +660,7 @@ export class Renderer {
       const w = lerp(tw, bw, pp);
       const lw = (w * 2) / 4;
       const nx = cx - w + n.lane * lw + lw / 2;
-      const sz = 14 + 32 * pp;
+      const sz = 22 + 42 * pp;
 
       // Glow intensifies smoothly as note approaches hit zone
       const glowI = pp * pp;
@@ -651,19 +670,21 @@ export class Renderer {
       const fadeIn = clamp(p * 4, 0, 1);
       ctx.globalAlpha = fadeIn * fadeIn * (3 - 2 * fadeIn);
 
-      // Note trail (soft gradient streak)
-      if (pp > 0.08) {
+      // Note trail (thicker gradient streak)
+      if (pp > 0.06) {
         ctx.save();
-        const trailAlpha = pp * pp * 0.35;
+        const trailAlpha = pp * pp * 0.45;
         ctx.globalAlpha = trailAlpha;
-        const trailLen = 60 * pp;
+        const trailLen = 80 * pp;
         const tg = ctx.createLinearGradient(0, y - trailLen, 0, y);
         tg.addColorStop(0, 'transparent');
-        tg.addColorStop(0.5, COLS[n.lane] + '22');
-        tg.addColorStop(0.85, COLS[n.lane] + '66');
+        tg.addColorStop(0.4, COLS[n.lane] + '18');
+        tg.addColorStop(0.75, COLS[n.lane] + '77');
         tg.addColorStop(1, COLS[n.lane]);
         ctx.fillStyle = tg;
-        const trailW = 4.5 * pp;
+        ctx.shadowColor = COLS[n.lane];
+        ctx.shadowBlur = 8;
+        const trailW = 6 * pp;
         ctx.fillRect(nx - trailW, y - trailLen, trailW * 2, trailLen);
         ctx.restore();
       }
