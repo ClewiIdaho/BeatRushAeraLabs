@@ -65,101 +65,111 @@ canvas { display: block; }
 /* ── Lobby Screen ───────────────────────────────────────────── */
 #lobbyScreen {
   background: radial-gradient(ellipse at center,
-    rgba(5, 3, 18, 0.38) 0%,
-    rgba(5, 3, 18, 0.55) 55%,
-    rgba(5, 3, 18, 0.75) 100%
+    rgba(5, 3, 18, 0.32) 0%,
+    rgba(5, 3, 18, 0.50) 55%,
+    rgba(5, 3, 18, 0.70) 100%
   );
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  justify-content: flex-start;
-  padding: 0;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  justify-content: center;
+  padding: 24px 20px;
+  gap: 0;
 }
 
 .lobby-header {
-  width: 100%; max-width: 820px;
-  padding: 18px 24px 10px;
   flex-shrink: 0;
   text-align: center;
+  margin-bottom: 18px;
+  animation: headerEntrance 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes headerEntrance {
+  0% { opacity: 0; transform: translateY(-30px) scale(0.8); }
+  60% { opacity: 1; transform: translateY(3px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .lobby-title {
   font-family: var(--font-heading);
-  font-size: clamp(22px, 3.5vw, 36px);
+  font-size: clamp(28px, 5vw, 48px);
   font-weight: 900;
-  letter-spacing: 10px;
+  letter-spacing: 14px;
   line-height: 1;
   background: linear-gradient(135deg, #fff 0%, var(--cyan) 40%, var(--magenta) 70%, var(--purple) 100%);
   background-size: 300% 300%;
-  animation: gradientShift 6s ease infinite;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 24px rgba(0,240,255,.35)) drop-shadow(0 0 48px rgba(255,0,255,.15));
+  animation: gradientShift 6s ease infinite, titleGlow 3s ease infinite;
+}
+
+@keyframes titleGlow {
+  0%, 100% { filter: drop-shadow(0 0 20px rgba(0,240,255,.3)) drop-shadow(0 0 40px rgba(255,0,255,.12)); }
+  50% { filter: drop-shadow(0 0 36px rgba(0,240,255,.55)) drop-shadow(0 0 70px rgba(255,0,255,.3)); }
 }
 
 .lobby-sub {
   font-family: var(--font-body);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 300;
-  letter-spacing: 5px;
-  margin-top: 5px;
-  color: rgba(255,255,255,0.22);
+  letter-spacing: 6px;
+  margin-top: 8px;
+  color: rgba(255,255,255,0.25);
+  animation: headerEntrance 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.15s both;
 }
 
-.lobby-body {
-  width: 100%; max-width: 820px;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 0;
-  padding: 0 20px;
-  overflow: hidden;
-  background: rgba(8, 5, 25, 0.5);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 14px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 4px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.04);
-}
-
-.lobby-left {
-  flex: 3;
-  min-width: 0;
+/* ── Centered Glass Panel ──────────────────────────────────── */
+.lobby-panel {
+  width: 100%;
+  max-width: 500px;
+  max-height: 60vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px 14px 12px 12px;
+  background: rgba(8, 5, 25, 0.55);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 8px 40px rgba(0,0,0,.35),
+    0 0 60px rgba(0,240,255,.04),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 -1px 0 rgba(255,255,255,.02);
+  padding: 14px 16px;
+  animation: panelEntrance 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
 }
 
-.lobby-right {
-  flex: 2;
-  min-width: 0;
-  max-width: 260px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 12px 12px 12px 14px;
-  border-left: 1px solid rgba(255,255,255,0.05);
+@keyframes panelEntrance {
+  0% { opacity: 0; transform: translateY(20px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.lobby-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), rgba(0,240,255,0.08), rgba(255,255,255,0.06), transparent);
+  margin: 10px 0;
+  flex-shrink: 0;
 }
 
 .lobby-section-label {
   font-family: var(--font-heading);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
   letter-spacing: 5px;
-  color: rgba(255,255,255,0.16);
-  margin-bottom: 8px;
+  color: rgba(255,255,255,0.15);
+  margin-bottom: 6px;
   flex-shrink: 0;
 }
 
 .lobby-footer {
-  width: 100%; max-width: 820px;
-  padding: 8px 24px 14px;
+  padding: 10px 0 0;
   font-size: 8px;
   font-weight: 300;
   color: rgba(255,255,255,.10);
   letter-spacing: 3px;
   flex-shrink: 0;
   text-align: center;
+  animation: panelEntrance 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.4s both;
 }
 
 /* ── Best Runs Panel ────────────────────────────────────────── */
@@ -167,9 +177,10 @@ canvas { display: block; }
   display: flex;
   flex-direction: column;
   gap: 3px;
-  flex: 1;
+  max-height: 120px;
   min-height: 0;
   overflow-y: auto;
+  flex-shrink: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,0,255,.12) transparent;
 }
@@ -183,8 +194,8 @@ canvas { display: block; }
   color: rgba(255,255,255,.13);
   letter-spacing: 3px;
   text-align: center;
-  line-height: 1.8;
-  margin-top: 20px;
+  line-height: 1.6;
+  padding: 8px 0;
 }
 
 .best-run-card {
@@ -453,9 +464,9 @@ canvas { display: block; }
 /* ── Song List ─────────────────────────────────────────────── */
 .song-list {
   flex: 1;
-  min-height: 0;
+  min-height: 80px;
   overflow-y: auto;
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 2px;
   padding-right: 3px;
   scrollbar-width: thin;
   scrollbar-color: rgba(0,240,255,.15) transparent;
@@ -652,11 +663,10 @@ canvas { display: block; }
 body.gameplay-active { cursor: none; }
 
 /* ── Responsive ────────────────────────────────────────────── */
-@media (max-width: 700px) {
-  .lobby-body { flex-direction: column; }
-  .lobby-right { max-width: none; max-height: 150px; flex: none; border-left: none; border-top: 1px solid rgba(255,255,255,0.05); }
-  .lobby-header, .lobby-footer { padding-left: 12px; padding-right: 12px; }
-  .lobby-body { padding: 0 10px; }
+@media (max-width: 600px) {
+  #lobbyScreen { padding: 16px 12px; }
+  .lobby-panel { max-width: none; padding: 10px 12px; border-radius: 14px; }
+  .lobby-title { letter-spacing: 8px; }
 }
 
 @media (max-width: 480px) {

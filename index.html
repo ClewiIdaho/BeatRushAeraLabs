@@ -20,23 +20,18 @@
 <!-- Game canvas (gameplay rendering) -->
 <canvas id="gameCv"></canvas>
 
-<!-- ── Lobby Screen (Menu + Song Select combined) ──────────── -->
+<!-- ── Lobby Screen ────────────────────────────────────────── -->
 <div id="lobbyScreen" class="screen active">
   <div class="lobby-header">
-    <div class="lobby-brand">
-      <div class="lobby-title">BEAT RUSH</div>
-      <div class="lobby-sub">RHYTHM &nbsp;&bull;&nbsp; PRECISION &nbsp;&bull;&nbsp; SPEED</div>
-    </div>
+    <div class="lobby-title">BEAT RUSH</div>
+    <div class="lobby-sub">RHYTHM &nbsp;&bull;&nbsp; PRECISION &nbsp;&bull;&nbsp; SPEED</div>
   </div>
-  <div class="lobby-body">
-    <div class="lobby-left">
-      <div class="lobby-section-label">SELECT TRACK</div>
-      <div class="song-list" id="songList"></div>
-    </div>
-    <div class="lobby-right">
-      <div class="lobby-section-label">BEST RUNS</div>
-      <div id="bestRunsList" class="best-runs-list"></div>
-    </div>
+  <div class="lobby-panel">
+    <div class="lobby-section-label">SELECT TRACK</div>
+    <div class="song-list" id="songList"></div>
+    <div class="lobby-divider"></div>
+    <div class="lobby-section-label">BEST RUNS</div>
+    <div id="bestRunsList" class="best-runs-list"></div>
   </div>
   <div class="lobby-footer">&#x2191;&#x2193; NAVIGATE &nbsp;&bull;&nbsp; ENTER / CLICK SELECT</div>
 </div>
