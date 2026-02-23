@@ -20,22 +20,25 @@
 <!-- Game canvas (gameplay rendering) -->
 <canvas id="gameCv"></canvas>
 
-<!-- ── Menu Screen ─────────────────────────────────────────── -->
-<div id="menuScreen" class="screen active">
-  <div class="title">BEAT RUSH</div>
-  <div class="sub">RHYTHM &nbsp;&bull; &nbsp;PRECISION &nbsp;&bull; &nbsp;SPEED</div>
-  <button class="btn" id="startBtn">PLAY</button>
-  <div class="hint" style="margin-top:40px">SELECT A TRACK AND RIDE THE BEAT</div>
-</div>
-
-<!-- ── Song Select Screen ──────────────────────────────────── -->
-<div id="songSelectScreen" class="screen">
-  <div class="screen-header">
-    <button class="back-btn" id="backBtn">&larr; BACK</button>
-    <div class="screen-title">SELECT TRACK</div>
+<!-- ── Lobby Screen (Menu + Song Select combined) ──────────── -->
+<div id="lobbyScreen" class="screen active">
+  <div class="lobby-header">
+    <div class="lobby-brand">
+      <div class="lobby-title">BEAT RUSH</div>
+      <div class="lobby-sub">RHYTHM &nbsp;&bull;&nbsp; PRECISION &nbsp;&bull;&nbsp; SPEED</div>
+    </div>
   </div>
-  <div class="song-list" id="songList"></div>
-  <div class="song-select-footer">&uarr;&darr; NAVIGATE &nbsp;&bull;&nbsp; ENTER SELECT &nbsp;&bull;&nbsp; ESC BACK</div>
+  <div class="lobby-body">
+    <div class="lobby-left">
+      <div class="lobby-section-label">SELECT TRACK</div>
+      <div class="song-list" id="songList"></div>
+    </div>
+    <div class="lobby-right">
+      <div class="lobby-section-label">BEST RUNS</div>
+      <div id="bestRunsList" class="best-runs-list"></div>
+    </div>
+  </div>
+  <div class="lobby-footer">&#x2191;&#x2193; NAVIGATE &nbsp;&bull;&nbsp; ENTER / CLICK SELECT</div>
 </div>
 
 <!-- ── Loading Screen ──────────────────────────────────────── -->
