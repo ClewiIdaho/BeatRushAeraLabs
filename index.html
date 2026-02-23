@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Beat Rush</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,19 +14,22 @@
 <!-- Background canvas (space scene) -->
 <canvas id="bgCv" class="bg-cv"></canvas>
 
+<!-- Cinematic vignette -->
+<div class="vignette"></div>
+
 <!-- Game canvas (gameplay rendering) -->
-<canvas id="gameCv" class="hide" style="position:absolute;inset:0;z-index:1"></canvas>
+<canvas id="gameCv"></canvas>
 
 <!-- ── Menu Screen ─────────────────────────────────────────── -->
-<div id="menuScreen" class="screen">
+<div id="menuScreen" class="screen active">
   <div class="title">BEAT RUSH</div>
   <div class="sub">RHYTHM &nbsp;&bull; &nbsp;PRECISION &nbsp;&bull; &nbsp;SPEED</div>
   <button class="btn" id="startBtn">PLAY</button>
-  <div class="hint" style="margin-top:36px">SELECT A TRACK AND RIDE THE BEAT</div>
+  <div class="hint" style="margin-top:40px">SELECT A TRACK AND RIDE THE BEAT</div>
 </div>
 
 <!-- ── Song Select Screen ──────────────────────────────────── -->
-<div id="songSelectScreen" class="screen hide">
+<div id="songSelectScreen" class="screen">
   <div class="screen-header">
     <button class="back-btn" id="backBtn">&larr; BACK</button>
     <div class="screen-title">SELECT TRACK</div>
@@ -33,7 +39,7 @@
 </div>
 
 <!-- ── Loading Screen ──────────────────────────────────────── -->
-<div id="loadingScreen" class="screen hide">
+<div id="loadingScreen" class="screen">
   <div class="loading-title">LOADING</div>
   <div class="loading-song-name" id="loadingSongName"></div>
   <div class="loading-bar-outer">
@@ -43,14 +49,29 @@
 </div>
 
 <!-- ── Results Screen ──────────────────────────────────────── -->
-<div id="resultsScreen" class="screen hide">
-  <div class="results-label">RESULTS</div>
-  <div class="rank" id="rankText"></div>
-  <div id="accText" style="font-size:11px;color:#667;letter-spacing:4px;margin-bottom:12px"></div>
-  <div id="songPlayed" class="song-played"></div>
-  <div id="scoreText" style="font-size:30px;font-weight:bold;margin-bottom:30px"></div>
-  <div class="stats" id="statsGrid"></div>
-  <button class="btn2" id="retryBtn">CONTINUE</button>
+<div id="resultsScreen" class="screen">
+  <div class="results-panel">
+    <div class="results-label">RESULTS</div>
+    <div class="rank" id="rankText"></div>
+    <div class="acc-text" id="accText"></div>
+    <div id="songPlayed" class="song-played"></div>
+    <div class="new-highscore" id="newHighScore">NEW HIGH SCORE!</div>
+    <div class="score-text" id="scoreText"></div>
+    <div class="stats" id="statsGrid"></div>
+    <div class="btn-row">
+      <button class="btn2" id="retryBtn">RETRY</button>
+      <button class="btn-ghost" id="trackSelectBtn">TRACKS</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Pause Overlay ───────────────────────────────────────── -->
+<div class="pause-overlay" id="pauseOverlay">
+  <div class="pause-title">PAUSED</div>
+  <div class="pause-actions">
+    <button class="btn" id="resumeBtn" style="font-size:14px;padding:14px 50px">RESUME</button>
+    <button class="btn-ghost" id="pauseQuitBtn">QUIT TO TRACKS</button>
+  </div>
 </div>
 
 <!-- ── Touch Controls ──────────────────────────────────────── -->

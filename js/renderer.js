@@ -1,23 +1,28 @@
 // ── Renderer ──────────────────────────────────────────────────
-// All canvas drawing: background, highway, notes, HUD, effects
+// All canvas drawing: background, highway, arrow notes, HUD, effects
 
 import { lerp, hsl, clamp } from './utils.js';
 
-// Lane colors
-const COLS  = ['#00ffff', '#ff00ff', '#00ff66', '#ffaa00'];
-const COLS2 = ['#007799', '#990099', '#009933', '#996600'];
-const COLSG = ['#00ccff', '#cc00ff', '#00dd55', '#ff8800'];
-const KEY_LABELS = ['A / \u2190', 'W / \u2191', 'S / \u2193', 'D / \u2192'];
+// Lane colors: cyan, magenta, green, amber
+const COLS  = ['#00f0ff', '#ff00ff', '#00ff88', '#ffaa00'];
+const COLS2 = ['#007799', '#990099', '#009944', '#996600'];
+const COLSG = ['#00ccff', '#cc00ff', '#00dd66', '#ff8800'];
+const KEY_LABELS = ['\u2190  A', '\u2191  W', '\u2193  S', '\u2192  D'];
+
+// Arrow rotations: lane → rotation (arrow base shape points UP)
+// Lane 0=left, 1=up, 2=down, 3=right
+const ARROW_ROT = [-Math.PI / 2, 0, Math.PI, Math.PI / 2];
 
 // Background elements (generated once)
 const stars = [];
-for (let i = 0; i < 120; i++) {
+for (let i = 0; i < 150; i++) {
   stars.push({
     x: Math.random(), y: Math.random(),
-    sz: 0.3 + Math.random() * 1.8,
-    spd: 0.2 + Math.random() * 0.8,
+    sz: 0.2 + Math.random() * 2,
+    spd: 0.15 + Math.random() * 0.6,
     hue: Math.random() * 360,
-    tw: 1 + Math.random() * 3,
+    tw: 0.8 + Math.random() * 3,
+    phase: Math.random() * Math.PI * 2,
   });
 }
 const nebulae = [];
@@ -35,6 +40,7 @@ export class Renderer {
   constructor(bgCanvas, gameCanvas) {
     this.bgCv = bgCanvas;
     this.gameCv = gameCanvas;
+    this._displayScore = 0; // interpolated score for smooth counting
   }
 
   resize(cv) {
@@ -47,14 +53,155 @@ export class Renderer {
     cv.style.height = h + 'px';
   }
 
+  // ── Arrow path builder (points UP, centered at origin) ────
+
+  _arrowPath(ctx, sz) {
+    const w = sz * 0.88;
+    const h = sz * 0.88;
+    const shaftW = w * 0.32;
+    const headH = h * 0.50;
+
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2);                   // tip
+    ctx.lineTo(w / 2, -h / 2 + headH);       // head right
+    ctx.lineTo(shaftW / 2, -h / 2 + headH);  // shaft top-right
+    ctx.lineTo(shaftW / 2, h / 2);            // shaft bottom-right
+    ctx.lineTo(-shaftW / 2, h / 2);           // shaft bottom-left
+    ctx.lineTo(-shaftW / 2, -h / 2 + headH); // shaft top-left
+    ctx.lineTo(-w / 2, -h / 2 + headH);      // head left
+    ctx.closePath();
+  }
+
+  // Simplified arrow for small sizes (just the chevron head)
+  _arrowPathSmall(ctx, sz) {
+    const w = sz * 0.9;
+    const h = sz * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2);
+    ctx.lineTo(w / 2, h / 2);
+    ctx.lineTo(0, h / 4);
+    ctx.lineTo(-w / 2, h / 2);
+    ctx.closePath();
+  }
+
+  // ── Falling arrow note ────────────────────────────────────
+
+  drawArrow(ctx, x, y, size, lane, glowIntensity) {
+    const c = COLS[lane];
+    const c2 = COLS2[lane];
+    const cg = COLSG[lane];
+    const sz = size;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ARROW_ROT[lane]);
+
+    // Outer neon glow
+    if (glowIntensity > 0) {
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 12 + glowIntensity * 22;
+    }
+
+    // Build path (simplified at small sizes for readability)
+    if (sz < 16) {
+      this._arrowPathSmall(ctx, sz);
+    } else {
+      this._arrowPath(ctx, sz);
+    }
+
+    // Main gradient fill (glassmorphic: lighter center, darker edges)
+    const hw = sz * 0.44;
+    const grad = ctx.createLinearGradient(-hw, -hw, hw, hw);
+    grad.addColorStop(0, c2);
+    grad.addColorStop(0.3, c);
+    grad.addColorStop(0.7, cg);
+    grad.addColorStop(1, c2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Glass highlight on upper portion
+    if (sz >= 16) {
+      ctx.save();
+      ctx.clip();
+      const hl = ctx.createLinearGradient(0, -sz / 2, 0, 0);
+      hl.addColorStop(0, 'rgba(255,255,255,0.42)');
+      hl.addColorStop(0.45, 'rgba(255,255,255,0.12)');
+      hl.addColorStop(1, 'transparent');
+      ctx.fillStyle = hl;
+      ctx.fillRect(-sz, -sz, sz * 2, sz);
+      ctx.restore();
+    }
+
+    // Crisp border
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Target arrow at hit zone (glass receptor) ─────────────
+
+  drawTargetArrow(ctx, x, y, lane, flash, t) {
+    const c = COLS[lane];
+    const sz = 24;
+
+    // Constant subtle idle pulse
+    const pulse = 0.15 + Math.sin(t * 0.004 + lane * 1.5) * 0.06;
+    const scale = 1 + flash * 0.15;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.rotate(ARROW_ROT[lane]);
+
+    this._arrowPath(ctx, sz);
+
+    if (flash > 0.05) {
+      // Bright fill on hit
+      ctx.fillStyle = c;
+      ctx.globalAlpha = 0.25 + flash * 0.75;
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 20 + flash * 25;
+      ctx.fill();
+    } else {
+      // Faint glass fill
+      ctx.fillStyle = c;
+      ctx.globalAlpha = 0.03;
+      ctx.fill();
+    }
+
+    // Border (always visible)
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = pulse + flash * 0.6 + 0.12;
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Radial flash glow
+    if (flash > 0.05) {
+      ctx.save();
+      ctx.globalAlpha = flash * 0.6;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 70);
+      g.addColorStop(0, c + '66');
+      g.addColorStop(0.4, c + '22');
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - 70, y - 70, 140, 140);
+      ctx.restore();
+    }
+  }
+
   // ── Background (space scene) ──────────────────────────────
 
   drawBackground(ctx, W, H, t, intensity) {
-    // Radial gradient base
     const bg = ctx.createRadialGradient(W / 2, H * 0.35, 0, W / 2, H * 0.5, W);
-    bg.addColorStop(0, 'rgba(15,5,40,1)');
-    bg.addColorStop(0.4, 'rgba(5,2,25,1)');
-    bg.addColorStop(1, 'rgba(1,0,8,1)');
+    bg.addColorStop(0, 'rgba(18,15,42,1)');
+    bg.addColorStop(0.4, 'rgba(10,10,26,1)');
+    bg.addColorStop(1, 'rgba(5,3,12,1)');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -71,17 +218,18 @@ export class Renderer {
       ctx.fillRect(nx - nr, ny - nr, nr * 2, nr * 2);
     }
 
-    // Stars
+    // Stars with sine-wave wandering (perlin-like)
     for (const s of stars) {
-      const tw = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.001 * s.tw + s.x * 10));
-      const sx = (s.x * W + t * s.spd * 0.02) % W;
+      const tw = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.001 * s.tw + s.phase));
+      const sx = (s.x * W + Math.sin(t * 0.0002 * s.spd + s.phase) * 12 + t * s.spd * 0.015) % W;
+      const sy = s.y * H + Math.cos(t * 0.00015 * s.tw + s.phase * 2) * 6;
       ctx.save();
-      ctx.globalAlpha = tw * 0.7 * intensity;
+      ctx.globalAlpha = tw * 0.65 * intensity;
       ctx.fillStyle = hsl(s.hue, 60, 80);
       ctx.shadowColor = hsl(s.hue, 80, 70);
-      ctx.shadowBlur = s.sz * 3;
+      ctx.shadowBlur = s.sz * 2.5;
       ctx.beginPath();
-      ctx.arc(sx, s.y * H, s.sz, 0, Math.PI * 2);
+      ctx.arc(sx, clamp(sy, 0, H), s.sz, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -110,7 +258,7 @@ export class Renderer {
 
     // Hex grid
     ctx.save();
-    ctx.globalAlpha = 0.015 * intensity;
+    ctx.globalAlpha = 0.012 * intensity;
     const hz = 40;
     for (let y = 0; y < H; y += hz * 1.5) {
       for (let x = 0; x < W; x += hz * 1.73) {
@@ -130,10 +278,12 @@ export class Renderer {
 
     // Scanlines
     ctx.save();
-    ctx.globalAlpha = 0.02;
+    ctx.globalAlpha = 0.018;
     for (let y = 0; y < H; y += 3) {
-      ctx.fillStyle = y % 6 < 3 ? 'rgba(255,255,255,.015)' : 'transparent';
-      ctx.fillRect(0, y, W, 1.5);
+      if (y % 6 < 3) {
+        ctx.fillStyle = 'rgba(255,255,255,.012)';
+        ctx.fillRect(0, y, W, 1.5);
+      }
     }
     ctx.restore();
   }
@@ -149,108 +299,15 @@ export class Renderer {
     this.drawBackground(ctx, W, H, performance.now(), 0.8);
   }
 
-  // ── Guitar Hero-style gem note ────────────────────────────
-
-  drawGem(ctx, x, y, size, lane, glow, scaleBoost) {
-    const c = COLS[lane];
-    const c2 = COLS2[lane];
-    const cg = COLSG[lane];
-    const sz = size * (1 + (scaleBoost || 0));
-
-    ctx.save();
-    ctx.translate(x, y);
-
-    // Outer glow
-    if (glow) {
-      ctx.shadowColor = c;
-      ctx.shadowBlur = 25;
-    }
-
-    // Diamond shape
-    const hw = sz * 0.85;
-    const hh = sz * 0.55;
-    ctx.beginPath();
-    ctx.moveTo(0, -hh);
-    ctx.lineTo(hw, 0);
-    ctx.lineTo(0, hh);
-    ctx.lineTo(-hw, 0);
-    ctx.closePath();
-
-    // Main gradient fill
-    const grad = ctx.createLinearGradient(-hw, -hh, hw, hh);
-    grad.addColorStop(0, c2);
-    grad.addColorStop(0.3, c);
-    grad.addColorStop(0.7, cg);
-    grad.addColorStop(1, c2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // Inner highlight (top-left shine)
-    ctx.save();
-    ctx.clip();
-    const hl = ctx.createLinearGradient(0, -hh, 0, hh * 0.3);
-    hl.addColorStop(0, 'rgba(255,255,255,0.45)');
-    hl.addColorStop(0.4, 'rgba(255,255,255,0.15)');
-    hl.addColorStop(1, 'transparent');
-    ctx.fillStyle = hl;
-    ctx.fillRect(-hw, -hh, hw * 2, hh * 1.3);
-    ctx.restore();
-
-    // Border
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Center dot
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath();
-    ctx.arc(0, 0, sz * 0.12, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // ── Target gem (at hit zone) ──────────────────────────────
-
-  drawTargetGem(ctx, x, y, lane, flash) {
-    const c = COLS[lane];
-    const size = 22 + flash * 8;
-
-    ctx.save();
-    ctx.globalAlpha = 0.2 + flash * 0.8;
-    this.drawGem(ctx, x, y, size, lane, flash > 0.15, 0);
-    ctx.restore();
-
-    // Flash radial glow
-    if (flash > 0) {
-      ctx.save();
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 80);
-      g.addColorStop(0, c + Math.floor(flash * 100).toString(16).padStart(2, '0'));
-      g.addColorStop(0.4, c + Math.floor(flash * 35).toString(16).padStart(2, '0'));
-      g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g;
-      ctx.fillRect(x - 80, y - 80, 160, 160);
-      ctx.restore();
-
-      // Lane beam
-      ctx.save();
-      ctx.globalAlpha = flash * 0.2;
-      ctx.fillStyle = c;
-      ctx.fillRect(x - 5, y - 200, 10, 200);
-      ctx.restore();
-    }
-  }
-
   // ── Highway (3D perspective) ──────────────────────────────
 
   drawHighway(ctx, W, H, t, beatPulse, energy, effects) {
     const cx = W / 2;
-    const vy = H * 0.04;           // vanishing point Y
-    const hy = H * 0.82;           // hit zone Y
-    const tw = W * 0.035;          // top width
-    const bw = W * 0.3;            // bottom width
-    const hl = hy - vy;            // highway length
+    const vy = H * 0.04;
+    const hy = H * 0.82;
+    const tw = W * 0.035;
+    const bw = W * 0.3;
+    const hl = hy - vy;
     const bp = beatPulse;
     const bassE = energy.bass || 0;
 
@@ -263,8 +320,8 @@ export class Renderer {
     ctx.lineTo(cx - bw - 15, hy + 12);
     ctx.closePath();
     ctx.shadowColor = hsl(260, 100, 60, 0.5 + bp * 0.4 + bassE * 0.3);
-    ctx.shadowBlur = 60 + bp * 30 + bassE * 20;
-    ctx.fillStyle = 'rgba(3,1,15,0.96)';
+    ctx.shadowBlur = 50 + bp * 30 + bassE * 20;
+    ctx.fillStyle = 'rgba(3,1,15,0.97)';
     ctx.fill();
     ctx.restore();
 
@@ -278,51 +335,51 @@ export class Renderer {
     ctx.closePath();
     const hg = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
     hg.addColorStop(0, 'rgba(8,3,30,0.97)');
-    hg.addColorStop(0.5, `rgba(${12 + bp * 18 + bassE * 10},${5 + bp * 10},${40 + bp * 25},0.95)`);
+    hg.addColorStop(0.5, `rgba(${10 + bp * 15 + bassE * 8},${4 + bp * 8},${35 + bp * 20},0.96)`);
     hg.addColorStop(1, 'rgba(8,3,30,0.97)');
     ctx.fillStyle = hg;
     ctx.fill();
 
-    // Top glow
+    // Surface sheen (top)
     ctx.save();
     ctx.clip();
-    const gl = ctx.createLinearGradient(0, vy, 0, vy + hl * 0.25);
-    gl.addColorStop(0, 'rgba(120,80,255,0.06)');
+    const gl = ctx.createLinearGradient(0, vy, 0, vy + hl * 0.2);
+    gl.addColorStop(0, 'rgba(120,80,255,0.05)');
     gl.addColorStop(1, 'transparent');
     ctx.fillStyle = gl;
-    ctx.fillRect(cx - bw, vy, bw * 2, hl * 0.25);
+    ctx.fillRect(cx - bw, vy, bw * 2, hl * 0.2);
     ctx.restore();
     ctx.restore();
 
-    // Edge lines (neon)
+    // Edge neon borders
     for (let s = -1; s <= 1; s += 2) {
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(cx + s * tw, vy);
       ctx.lineTo(cx + s * bw, hy);
       const ec = ctx.createLinearGradient(0, vy, 0, hy);
-      ec.addColorStop(0, hsl(280, 100, 60, 0.2));
-      ec.addColorStop(0.5, hsl(200, 100, 60, 0.5 + bp * 0.3));
-      ec.addColorStop(1, hsl(180, 100, 60, 0.6 + bp * 0.3));
+      ec.addColorStop(0, hsl(280, 100, 60, 0.15));
+      ec.addColorStop(0.5, hsl(200, 100, 60, 0.45 + bp * 0.3));
+      ec.addColorStop(1, hsl(180, 100, 60, 0.55 + bp * 0.3));
       ctx.strokeStyle = ec;
       ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#0ff';
-      ctx.shadowBlur = 15 + bp * 10;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 14 + bp * 10;
       ctx.stroke();
       ctx.restore();
 
-      // Edge glow spread
+      // Feathered bloom
       ctx.beginPath();
       ctx.moveTo(cx + s * tw, vy);
       ctx.lineTo(cx + s * bw, hy);
-      ctx.strokeStyle = 'rgba(0,255,255,0.04)';
-      ctx.lineWidth = 12;
+      ctx.strokeStyle = 'rgba(0,240,255,0.03)';
+      ctx.lineWidth = 14;
       ctx.stroke();
     }
 
     // Combo fire along edges
     if (effects.comboFire > 0) {
-      const fireInt = effects.comboFire;
+      const fi = effects.comboFire;
       for (let s = -1; s <= 1; s += 2) {
         ctx.save();
         for (let i = 0; i < 15; i++) {
@@ -332,10 +389,9 @@ export class Renderer {
           const w = lerp(tw, bw, p);
           const ex = cx + s * w;
           const radius = 10 + Math.sin(t * 0.012 + i) * 5;
-
-          ctx.globalAlpha = fireInt * (1 - Math.abs(p - 0.7)) * 0.3;
+          ctx.globalAlpha = fi * (1 - Math.abs(p - 0.7)) * 0.3;
           const fg = ctx.createRadialGradient(ex, y, 0, ex, y, radius);
-          fg.addColorStop(0, fireInt > 0.5 ? '#ffaa00' : '#ff6600');
+          fg.addColorStop(0, fi > 0.5 ? '#ffaa00' : '#ff6600');
           fg.addColorStop(0.5, '#ff440066');
           fg.addColorStop(1, 'transparent');
           ctx.fillStyle = fg;
@@ -345,44 +401,49 @@ export class Renderer {
       }
     }
 
-    // Grid lines (flowing towards player)
-    const elapsed = t;
+    // Flowing grid lines (perspective speed effect)
     for (let i = 0; i < 30; i++) {
-      let p = ((elapsed * 0.00042 + i / 30) % 1);
+      let p = ((t * 0.00042 + i / 30) % 1);
       const pp = Math.pow(p, 1.8);
       const y = vy + hl * pp;
       const w = lerp(tw, bw, pp);
       ctx.beginPath();
       ctx.moveTo(cx - w, y);
       ctx.lineTo(cx + w, y);
-      ctx.strokeStyle = hsl(260, 60, 50, 0.02 + pp * 0.08);
-      ctx.lineWidth = 0.5 + pp;
+      ctx.strokeStyle = hsl(260, 60, 50, 0.015 + pp * 0.07);
+      ctx.lineWidth = 0.4 + pp * 0.8;
       ctx.stroke();
     }
 
-    // Lane dividers
+    // Lane dividers (faint glowing lines)
     for (let i = 1; i < 4; i++) {
       const f = i / 4;
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(cx - tw + f * tw * 2, vy);
       ctx.lineTo(cx - bw + f * bw * 2, hy);
-      ctx.strokeStyle = hsl(260, 50, 50, 0.08);
+      const lc = ctx.createLinearGradient(0, vy, 0, hy);
+      lc.addColorStop(0, hsl(260, 50, 50, 0.02));
+      lc.addColorStop(0.5, hsl(260, 50, 50, 0.08));
+      lc.addColorStop(1, hsl(260, 50, 50, 0.06));
+      ctx.strokeStyle = lc;
       ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.restore();
     }
 
-    // Hit zone line
+    // Hit zone line (BPM-synced pulse)
     ctx.save();
     const hzg = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
     hzg.addColorStop(0, 'transparent');
-    hzg.addColorStop(0.15, hsl(180, 100, 60, 0.25 + bp * 0.2));
-    hzg.addColorStop(0.5, hsl(180, 100, 70, 0.5 + bp * 0.3));
-    hzg.addColorStop(0.85, hsl(180, 100, 60, 0.25 + bp * 0.2));
+    hzg.addColorStop(0.12, hsl(180, 100, 60, 0.2 + bp * 0.2));
+    hzg.addColorStop(0.5, hsl(180, 100, 70, 0.45 + bp * 0.35));
+    hzg.addColorStop(0.88, hsl(180, 100, 60, 0.2 + bp * 0.2));
     hzg.addColorStop(1, 'transparent');
     ctx.fillStyle = hzg;
     ctx.fillRect(cx - bw, hy - 4, bw * 2, 8);
-    ctx.shadowColor = '#0ff';
-    ctx.shadowBlur = 20 + bp * 12;
+    ctx.shadowColor = '#00f0ff';
+    ctx.shadowBlur = 18 + bp * 14;
     ctx.fillRect(cx - bw, hy - 1.5, bw * 2, 3);
     ctx.restore();
 
@@ -406,29 +467,32 @@ export class Renderer {
       const nx = cx - w + n.lane * lw + lw / 2;
       const sz = 9 + 22 * pp;
 
+      // Glow intensifies as note approaches hit zone
+      const glowI = Math.pow(pp, 2);
+
       ctx.save();
       ctx.globalAlpha = Math.min(1, p * 3.5);
 
-      // Note trail
+      // Note trail (light streak behind the arrow)
       if (pp > 0.1) {
         ctx.save();
-        ctx.globalAlpha = pp * 0.25;
+        ctx.globalAlpha = pp * 0.22;
         const tg = ctx.createLinearGradient(0, y - 40 * pp, 0, y);
         tg.addColorStop(0, 'transparent');
         tg.addColorStop(1, COLS[n.lane]);
         ctx.fillStyle = tg;
-        ctx.fillRect(nx - 4 * pp, y - 40 * pp, 8 * pp, 40 * pp);
+        ctx.fillRect(nx - 3.5 * pp, y - 40 * pp, 7 * pp, 40 * pp);
         ctx.restore();
       }
 
-      this.drawGem(ctx, nx, y, sz, n.lane, true, 0);
+      this.drawArrow(ctx, nx, y, sz, n.lane, glowI);
       ctx.restore();
     }
   }
 
-  // ── Target Gems & Lane Flashes ────────────────────────────
+  // ── Target Arrows & Lane Flashes ──────────────────────────
 
-  drawTargets(ctx, hw, flashes) {
+  drawTargets(ctx, hw, flashes, t) {
     const { cx, vy, hy, bw, hl } = hw;
 
     for (let i = 0; i < 4; i++) {
@@ -436,18 +500,18 @@ export class Renderer {
       const fl = flashes[i];
       const tx = cx - bw + f * bw * 2;
 
-      this.drawTargetGem(ctx, tx, hy, i, fl);
+      this.drawTargetArrow(ctx, tx, hy, i, fl, t);
 
       // Full lane beam on flash
-      if (fl > 0) {
+      if (fl > 0.05) {
         ctx.save();
-        ctx.globalAlpha = fl * 0.18;
+        ctx.globalAlpha = fl * 0.15;
         const bm = ctx.createLinearGradient(0, vy, 0, hy);
         bm.addColorStop(0, 'transparent');
         bm.addColorStop(0.6, COLS[i]);
         bm.addColorStop(1, COLS[i]);
         ctx.fillStyle = bm;
-        ctx.fillRect(tx - 6, vy, 12, hl);
+        ctx.fillRect(tx - 5, vy, 10, hl);
         ctx.restore();
       }
     }
@@ -458,19 +522,19 @@ export class Renderer {
   drawJudgment(ctx, judg, judgTime, now, cx, hy) {
     if (!judg || now - judgTime > 700) return;
     const a = (now - judgTime) / 700;
-    const colors = { PERFECT: '#0ff', GREAT: '#f0f', GOOD: '#0f6', MISS: '#f24' };
-    const scale = 1 + (1 - a) * 0.4;
+    const colors = { PERFECT: '#ffd700', GREAT: '#00f0ff', GOOD: '#00ff88', MISS: '#ff4466' };
+    const scale = 1 + (1 - a) * 0.5;
 
     ctx.save();
     ctx.globalAlpha = 1 - a * a;
-    ctx.translate(cx, hy + 45 - a * 25);
+    ctx.translate(cx, hy + 48 - a * 28);
     ctx.scale(scale, scale);
     ctx.fillStyle = colors[judg] || '#fff';
-    ctx.font = 'bold 26px monospace';
+    ctx.font = "bold 24px 'Orbitron', monospace";
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = colors[judg] || '#fff';
-    ctx.shadowBlur = 30;
+    ctx.shadowBlur = 28;
     ctx.fillText(judg, 0, 0);
     ctx.restore();
   }
@@ -480,31 +544,41 @@ export class Renderer {
   drawHUD(ctx, W, H, state, hw) {
     const { cx, hy, bw } = hw;
 
+    // Smooth score interpolation
+    const scoreDiff = state.score - this._displayScore;
+    this._displayScore += scoreDiff * 0.12;
+    if (Math.abs(scoreDiff) < 1) this._displayScore = state.score;
+    const displayScore = Math.round(this._displayScore);
+
     // Score
     ctx.save();
-    ctx.fillStyle = 'rgba(0,255,255,0.6)';
-    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = 'rgba(0,240,255,0.45)';
+    ctx.font = "600 9px 'Exo 2', monospace";
     ctx.textAlign = 'left';
-    ctx.fillText('SCORE', 14, 17);
+    ctx.fillText('SCORE', 16, 18);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px monospace';
-    ctx.shadowColor = '#0ff';
+    ctx.font = "700 24px 'Orbitron', monospace";
+    ctx.shadowColor = '#00f0ff';
     ctx.shadowBlur = 10;
-    ctx.fillText(state.score.toLocaleString(), 14, 40);
+    ctx.fillText(displayScore.toLocaleString(), 16, 43);
     ctx.restore();
 
     // Combo
     if (state.combo > 1) {
+      const comboScale = state.combo >= 100 ? 1.15 : state.combo >= 50 ? 1.08 : state.combo >= 25 ? 1.03 : 1;
+      const comboColor = state.combo >= 100 ? '#ffd700' : state.combo >= 50 ? '#ff00ff' : '#ffaa00';
+
       ctx.save();
       ctx.textAlign = 'right';
-      ctx.fillStyle = 'rgba(255,170,0,0.6)';
-      ctx.font = 'bold 10px monospace';
-      ctx.fillText('COMBO', W - 14, 17);
-      ctx.fillStyle = '#fa0';
-      ctx.font = `bold ${Math.min(32, 20 + state.combo * 0.3)}px monospace`;
-      ctx.shadowColor = '#fa0';
-      ctx.shadowBlur = 12;
-      ctx.fillText(state.combo + 'x', W - 14, 42);
+      ctx.fillStyle = comboColor + '77';
+      ctx.font = "600 9px 'Exo 2', monospace";
+      ctx.fillText('COMBO', W - 16, 18);
+      ctx.fillStyle = comboColor;
+      const comboFontSz = Math.min(34, 20 + state.combo * 0.25) * comboScale;
+      ctx.font = `700 ${comboFontSz}px 'Orbitron', monospace`;
+      ctx.shadowColor = comboColor;
+      ctx.shadowBlur = 14;
+      ctx.fillText(state.combo + 'x', W - 16, 44);
       ctx.restore();
     }
 
@@ -513,85 +587,110 @@ export class Renderer {
     if (mult > 1) {
       ctx.save();
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#0f6';
-      ctx.font = 'bold 11px monospace';
-      ctx.shadowColor = '#0f6';
+      ctx.fillStyle = '#00ff88';
+      ctx.font = "700 11px 'Exo 2', monospace";
+      ctx.shadowColor = '#00ff88';
       ctx.shadowBlur = 8;
-      ctx.fillText(mult + 'x MULT', W - 14, 60);
+      ctx.fillText(mult + 'x MULT', W - 16, 62);
       ctx.restore();
     }
 
     // Energy bar
-    const hbW = 140, hbH = 8, hbX = cx - 70, hbY = 10;
+    const hbW = 140, hbH = 7, hbX = cx - 70, hbY = 10;
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(hbX, hbY, hbW, hbH, 4);
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.roundRect(hbX, hbY, hbW, hbH, 3.5);
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.fill();
 
     const hpPct = state.hp / 100;
-    const hc = state.hp > 50 ? '#0ff' : state.hp > 25 ? '#fa0' : '#f24';
+    const hc = state.hp > 50 ? '#00f0ff' : state.hp > 25 ? '#ffaa00' : '#ff4466';
     const hpG = ctx.createLinearGradient(hbX, hbY, hbX + hbW * hpPct, hbY + hbH);
     hpG.addColorStop(0, hc);
-    hpG.addColorStop(0.5, 'rgba(255,255,255,0.25)');
+    hpG.addColorStop(0.5, 'rgba(255,255,255,0.2)');
     hpG.addColorStop(1, hc);
 
-    ctx.beginPath();
-    ctx.roundRect(hbX, hbY, hbW * hpPct, hbH, 4);
-    ctx.fillStyle = hpG;
-    ctx.shadowColor = hc;
-    ctx.shadowBlur = 10;
-    ctx.fill();
+    if (hpPct > 0.01) {
+      ctx.beginPath();
+      ctx.roundRect(hbX, hbY, hbW * hpPct, hbH, 3.5);
+      ctx.fillStyle = hpG;
+      ctx.shadowColor = hc;
+      ctx.shadowBlur = 10;
+      ctx.fill();
 
-    // HP shine
-    ctx.beginPath();
-    ctx.roundRect(hbX, hbY, hbW * hpPct, hbH / 2, 4);
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fill();
+      // HP shine
+      ctx.beginPath();
+      ctx.roundRect(hbX, hbY, hbW * hpPct, hbH / 2, 3.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fill();
+    }
     ctx.restore();
 
-    ctx.fillStyle = '#446';
-    ctx.font = '8px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,.18)';
+    ctx.font = "300 7px 'Exo 2', monospace";
     ctx.textAlign = 'center';
     ctx.fillText('ENERGY', cx, hbY + hbH + 12);
 
-    // Song progress bar
+    // Song progress bar (top, full width, thin gradient)
     if (state.songDuration > 0) {
       const prog = clamp(state.songElapsed / (state.songDuration * 1000), 0, 1);
-      const pbY = hbY + hbH + 20;
-      const pbW = 120, pbH = 3, pbX = cx - 60;
+      const pbY = 2, pbH = 3;
+      const pbW = W - 40;
+      const pbX = 20;
 
       ctx.save();
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
       ctx.fillRect(pbX, pbY, pbW, pbH);
-      ctx.fillStyle = 'rgba(0,255,255,0.4)';
+
+      const pg = ctx.createLinearGradient(pbX, 0, pbX + pbW * prog, 0);
+      pg.addColorStop(0, '#00f0ff');
+      pg.addColorStop(1, '#ff00ff');
+      ctx.fillStyle = pg;
       ctx.fillRect(pbX, pbY, pbW * prog, pbH);
+
+      // Glowing leading edge
+      if (prog > 0.01) {
+        ctx.save();
+        const lx = pbX + pbW * prog;
+        const lg = ctx.createRadialGradient(lx, pbY + 1.5, 0, lx, pbY + 1.5, 8);
+        lg.addColorStop(0, 'rgba(255,0,255,0.6)');
+        lg.addColorStop(1, 'transparent');
+        ctx.fillStyle = lg;
+        ctx.fillRect(lx - 8, pbY - 4, 16, 12);
+        ctx.restore();
+      }
       ctx.restore();
     }
 
-    // Key labels under highway
-    ctx.font = '9px monospace';
-    for (let i = 0; i < 4; i++) {
-      const f = (i + 0.5) / 4;
-      ctx.fillStyle = COLS[i] + '55';
-      ctx.textAlign = 'center';
-      ctx.fillText(KEY_LABELS[i], cx - bw + f * bw * 2, hy + 68);
+    // Key labels below highway (fade after 8 seconds)
+    const keyFade = state.songElapsed < 6000 ? 1 : state.songElapsed < 8000 ? 1 - (state.songElapsed - 6000) / 2000 : 0;
+    if (keyFade > 0) {
+      ctx.save();
+      ctx.globalAlpha = keyFade * 0.4;
+      ctx.font = "300 9px 'Exo 2', monospace";
+      for (let i = 0; i < 4; i++) {
+        const f = (i + 0.5) / 4;
+        ctx.fillStyle = COLS[i];
+        ctx.textAlign = 'center';
+        ctx.fillText(KEY_LABELS[i], cx - bw + f * bw * 2, hy + 66);
+      }
+      ctx.restore();
     }
   }
 
-  // ── Song title overlay during gameplay ────────────────────
+  // ── Song title overlay ────────────────────────────────────
 
   drawSongTitle(ctx, W, title, elapsed) {
     if (elapsed > 5000) return;
     const alpha = elapsed < 3000 ? 1 : 1 - (elapsed - 3000) / 2000;
     ctx.save();
-    ctx.globalAlpha = alpha * 0.6;
+    ctx.globalAlpha = alpha * 0.5;
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = "700 13px 'Orbitron', monospace";
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#0ff';
+    ctx.shadowColor = '#00f0ff';
     ctx.shadowBlur = 10;
-    ctx.fillText(title, W / 2, 65);
+    ctx.fillText(title, W / 2, 58);
     ctx.restore();
   }
 }
