@@ -7,7 +7,8 @@ import { generateBeatMap } from './beatmap.js';
 import { EffectsManager } from './effects.js';
 import { InputManager } from './input.js';
 import { Renderer } from './renderer.js';
-import { clamp } from './utils.js';
+import { clamp, easeOutCubic } from './utils.js';
+import { loadScore, loadAllScores, saveScore, getGrade, GRADE_COLORS } from './scores.js';
 
 // Timing windows (ms)
 const WIN = { p: 50, g: 100, k: 150 };
@@ -18,13 +19,14 @@ const TRAVEL = 2200;
 
 export class Game {
   constructor() {
-    this.state = 'menu'; // menu | songSelect | loading | playing | results
+    this.state = 'menu';
     this.audio = new AudioManager();
     this.effects = new EffectsManager();
     this.input = new InputManager();
     this.renderer = null;
     this.selectedSong = 0;
-    this.songScrollIndex = 0;
+    this.paused = false;
+    this.pauseTime = 0;
 
     // Gameplay data
     this.gd = null;
@@ -38,7 +40,6 @@ export class Game {
   }
 
   init() {
-    // Grab DOM elements
     this.dom = {
       bgCv: document.getElementById('bgCv'),
       gameCv: document.getElementById('gameCv'),
@@ -56,6 +57,8 @@ export class Game {
       scoreText: document.getElementById('scoreText'),
       statsGrid: document.getElementById('statsGrid'),
       songPlayed: document.getElementById('songPlayed'),
+      newHighScore: document.getElementById('newHighScore'),
+      pauseOverlay: document.getElementById('pauseOverlay'),
     };
 
     this.renderer = new Renderer(this.dom.bgCv, this.dom.gameCv);
@@ -73,8 +76,11 @@ export class Game {
 
     // Button events
     document.getElementById('startBtn').addEventListener('click', () => this.showSongSelect());
-    document.getElementById('retryBtn').addEventListener('click', () => this.showSongSelect());
+    document.getElementById('retryBtn').addEventListener('click', () => this._retrySong());
+    document.getElementById('trackSelectBtn').addEventListener('click', () => this.showSongSelect());
     document.getElementById('backBtn').addEventListener('click', () => this.showMenu());
+    document.getElementById('resumeBtn').addEventListener('click', () => this.resumeGame());
+    document.getElementById('pauseQuitBtn').addEventListener('click', () => this._quitToTracks());
 
     // Build song list
     this.buildSongList();
@@ -90,22 +96,36 @@ export class Game {
 
   showView(view) {
     this.state = view;
-    const views = ['menu', 'songSelect', 'loading', 'playing', 'results'];
     const screens = {
       menu: this.dom.menuScreen,
       songSelect: this.dom.songSelectScreen,
       loading: this.dom.loadingScreen,
-      playing: null, // canvas only
       results: this.dom.resultsScreen,
     };
 
-    for (const v of views) {
-      if (screens[v]) screens[v].classList.toggle('hide', v !== view);
+    // Toggle screen overlays with CSS transitions (active class = visible)
+    for (const [v, el] of Object.entries(screens)) {
+      if (el) el.classList.toggle('active', v === view);
     }
-    this.dom.gameCv.classList.toggle('hide', view !== 'playing');
+
+    // Game canvas
+    this.dom.gameCv.classList.toggle('visible', view === 'playing');
     this.dom.touchBar.style.display = view === 'playing' ? 'flex' : 'none';
 
-    // Toggle input modes
+    // Cursor management
+    document.body.classList.toggle('gameplay-active', view === 'playing');
+
+    // Hide pause overlay when leaving gameplay
+    if (view !== 'playing') {
+      this.dom.pauseOverlay.classList.remove('active');
+      this.paused = false;
+    }
+
+    // Configure input callbacks per state
+    this._configureInput(view);
+  }
+
+  _configureInput(view) {
     if (view === 'songSelect') {
       this.input.onHit = null;
       this.input.onNav = dir => this.navigateSongs(dir);
@@ -115,11 +135,11 @@ export class Game {
       this.input.onNav = null;
       this.input.onHit = lane => this.tryHit(lane);
       this.input.onSelect = null;
-      this.input.onBack = () => { this.audio.stop(); this.showSongSelect(); this.bgLoop(); };
+      this.input.onBack = () => this.togglePause();
     } else if (view === 'results') {
       this.input.onNav = null;
       this.input.onHit = null;
-      this.input.onSelect = () => this.showSongSelect();
+      this.input.onSelect = () => this._retrySong();
       this.input.onBack = () => this.showSongSelect();
     } else {
       this.input.onNav = null;
@@ -135,6 +155,7 @@ export class Game {
   }
 
   showSongSelect() {
+    this.buildSongList(); // refresh to show updated high scores
     this.showView('songSelect');
     this.highlightSong(this.selectedSong);
     this.bgLoop();
@@ -143,7 +164,9 @@ export class Game {
   // ── Song List UI ──────────────────────────────────────────
 
   buildSongList() {
+    const allScores = loadAllScores();
     this.dom.songList.innerHTML = '';
+
     SONGS.forEach((song, i) => {
       const card = document.createElement('div');
       card.className = 'song-card';
@@ -152,15 +175,26 @@ export class Game {
       const diffColor = DIFF_COLORS[song.difficulty];
       const stars = '\u2605'.repeat(song.difficulty) + '\u2606'.repeat(5 - song.difficulty);
 
+      // High score data
+      const hs = allScores[song.title];
+      let gradeHtml = '';
+      let hsHtml = '';
+      if (hs) {
+        const gc = GRADE_COLORS[hs.grade] || '#556';
+        gradeHtml = `<span class="song-grade-badge" style="color:${gc};border-color:${gc}55">${hs.grade}</span>`;
+        hsHtml = `<div class="song-highscore">${hs.score.toLocaleString()}</div>`;
+      }
+
       card.innerHTML = `
         <div class="song-card-left">
-          <div class="song-title">${song.title}</div>
+          <div class="song-title">${song.title}${gradeHtml}</div>
           <div class="song-meta">${song.key} \u2022 ${song.camelot}</div>
         </div>
         <div class="song-card-right">
           <div class="song-bpm">${song.bpm} <span class="bpm-label">BPM</span></div>
           <div class="song-difficulty" style="color:${diffColor}">${stars}</div>
           <div class="song-diff-label" style="color:${diffColor}">${song.diffLabel}</div>
+          ${hsHtml}
         </div>
       `;
 
@@ -194,7 +228,6 @@ export class Game {
     const song = SONGS[index];
     this.selectedSong = index;
 
-    // Show loading screen
     this.showView('loading');
     this.dom.loadingSongName.textContent = song.title;
     this.dom.loadingBar.style.width = '0%';
@@ -213,13 +246,77 @@ export class Game {
       this.dom.loadingBar.style.width = '100%';
       this.dom.loadingText.textContent = 'READY';
 
-      // Short delay then start
       await new Promise(r => setTimeout(r, 400));
       this.startGame(song);
     } catch (err) {
       console.error('Failed to load song:', err);
-      this.dom.loadingText.textContent = 'LOAD FAILED - CLICK TO RETRY';
+      this.dom.loadingText.textContent = 'LOAD FAILED \u2014 CLICK TO RETRY';
       this.dom.loadingScreen.addEventListener('click', () => this.showSongSelect(), { once: true });
+    }
+  }
+
+  // ── Pause System ──────────────────────────────────────────
+
+  togglePause() {
+    if (this.state !== 'playing') return;
+    if (this.paused) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  pauseGame() {
+    if (this.paused || this.state !== 'playing') return;
+    this.paused = true;
+    this.pauseTime = performance.now();
+    cancelAnimationFrame(this._gameAF);
+
+    // Suspend audio
+    if (this.audio.ctx) this.audio.ctx.suspend();
+
+    this.dom.pauseOverlay.classList.add('active');
+
+    // Reconfigure input for pause menu
+    this.input.onHit = null;
+    this.input.onNav = null;
+    this.input.onSelect = () => this.resumeGame();
+    this.input.onBack = () => this._quitToTracks();
+  }
+
+  resumeGame() {
+    if (!this.paused) return;
+    const pauseDuration = performance.now() - this.pauseTime;
+    this.gd.start += pauseDuration;
+    this.paused = false;
+
+    // Resume audio
+    if (this.audio.ctx) this.audio.ctx.resume();
+
+    this.dom.pauseOverlay.classList.remove('active');
+
+    // Restore gameplay input
+    this._configureInput('playing');
+    this.gameLoop();
+  }
+
+  _quitToTracks() {
+    this.paused = false;
+    this.audio.stop();
+    if (this.audio.ctx && this.audio.ctx.state === 'suspended') {
+      this.audio.ctx.resume();
+    }
+    cancelAnimationFrame(this._gameAF);
+    this.showSongSelect();
+    this.bgLoop();
+  }
+
+  _retrySong() {
+    const song = SONGS[this.selectedSong];
+    if (song && this.audio.buffer) {
+      this.startGame(song);
+    } else {
+      this.selectSong(this.selectedSong);
     }
   }
 
@@ -244,34 +341,32 @@ export class Game {
       judgT: 0,
       done: false,
       beatPulse: 0,
-      screenFlash: 0,
       songDuration: duration,
       songElapsed: 0,
     };
 
     this.effects = new EffectsManager();
+    this.renderer._displayScore = 0;
 
     this.showView('playing');
     this.renderer.resize(this.dom.gameCv);
 
-    // Start audio with a small delay to sync
+    // Start audio after delay to sync
     setTimeout(() => {
-      this.audio.play();
+      if (this.state === 'playing') this.audio.play();
     }, 800);
 
-    // Cancel bg loop and start game loop
     cancelAnimationFrame(this._bgAF);
     this.gameLoop();
   }
 
   tryHit(lane) {
-    if (!this.gd || this.gd.done) return;
+    if (!this.gd || this.gd.done || this.paused) return;
     const now = performance.now();
     const elapsed = now - this.gd.start;
 
     this.effects.laneFlashes[lane] = 1;
 
-    // Find closest unhit note in this lane
     let best = null, bestDist = Infinity;
     for (const n of this.gd.notes) {
       if (n.lane !== lane || n.hit || n.missed) continue;
@@ -312,9 +407,14 @@ export class Game {
       const lw = (bw * 2) / 4;
       const px = cx - bw + lane * lw + lw / 2;
 
-      const COLS = ['#00ffff', '#ff00ff', '#00ff66', '#ffaa00'];
+      const COLS = ['#00f0ff', '#ff00ff', '#00ff88', '#ffaa00'];
       this.effects.triggerHit(lane, px, hy, judg, COLS[lane], now);
       this.effects.updateComboFire(this.gd.combo);
+
+      // Combo milestones
+      if (this.gd.combo === 25 || this.gd.combo === 50 || this.gd.combo === 100) {
+        this.effects.triggerComboMilestone(cx, hy - 60, this.gd.combo, now);
+      }
     }
 
     this.gd.judg = judg;
@@ -322,17 +422,15 @@ export class Game {
   }
 
   gameLoop() {
-    if (this.state !== 'playing') return;
+    if (this.state !== 'playing' || this.paused) return;
 
     const now = performance.now();
     const elapsed = now - this.gd.start;
     const { gd } = this;
 
-    // Beat pulse
     gd.beatPulse = Math.pow(Math.max(0, 1 - ((elapsed % gd.beatMs) / gd.beatMs) * 3.5), 2);
     gd.songElapsed = elapsed;
 
-    // Update effects
     this.effects.update(now);
 
     // Check for missed notes
@@ -354,7 +452,7 @@ export class Game {
       setTimeout(() => this.showResults(), 500);
     }
 
-    // Song end: check if audio ended OR all notes passed
+    // Song end
     const lastNote = gd.notes[gd.notes.length - 1];
     const songEnded = !this.audio.playing && elapsed > 3000;
     const notesEnded = lastNote && elapsed > lastNote.t + 3000;
@@ -370,7 +468,7 @@ export class Game {
     const W = this.dom.gameCv.width / dpr;
     const H = this.dom.gameCv.height / dpr;
 
-    // Apply screen shake
+    // Screen shake
     if (this.effects.screenShake.intensity > 0) {
       ctx.translate(this.effects.screenShake.x, this.effects.screenShake.y);
     }
@@ -386,8 +484,8 @@ export class Game {
     // Highway
     const hw = this.renderer.drawHighway(ctx, W, H, now, gd.beatPulse, energy, this.effects);
 
-    // Target gems
-    this.renderer.drawTargets(ctx, hw, this.effects.laneFlashes);
+    // Target arrows (pass time for idle pulse)
+    this.renderer.drawTargets(ctx, hw, this.effects.laneFlashes, now);
 
     // Rings
     this.effects.drawRings(ctx, now);
@@ -404,7 +502,7 @@ export class Game {
     // HUD
     this.renderer.drawHUD(ctx, W, H, gd, hw);
 
-    // Song title (fades after 5s)
+    // Song title
     this.renderer.drawSongTitle(ctx, W, gd.song.title, elapsed);
 
     this._gameAF = requestAnimationFrame(() => this.gameLoop());
@@ -416,39 +514,65 @@ export class Game {
     this.audio.stop();
     cancelAnimationFrame(this._gameAF);
 
-    const { stats, score, maxCombo } = this.gd;
+    const { stats, score, maxCombo, song } = this.gd;
     const total = stats.perfect + stats.great + stats.good + stats.miss;
     const acc = total > 0
       ? Math.round(((stats.perfect + stats.great * 0.7 + stats.good * 0.4) / total) * 100)
       : 0;
-    const rank = acc >= 95 ? 'S+' : acc >= 90 ? 'S' : acc >= 80 ? 'A' : acc >= 70 ? 'B' : acc >= 60 ? 'C' : 'D';
-    const rc = { 'S+': '#ffaa00', S: '#00ffff', A: '#00ff66', B: '#ff00ff', C: '#ff8800', D: '#ff2244' }[rank];
+    const grade = getGrade(acc);
+    const rc = GRADE_COLORS[grade] || '#556';
+
+    // Save high score
+    const isNewHigh = saveScore(song.title, {
+      score, maxCombo, accuracy: acc,
+      perfectCount: stats.perfect,
+      greatCount: stats.great,
+      goodCount: stats.good,
+      missCount: stats.miss,
+      grade,
+    });
 
     // Rank
-    this.dom.rankText.textContent = rank;
-    this.dom.rankText.style.cssText = `font-size:88px;font-weight:bold;line-height:1;margin-bottom:6px;color:${rc};text-shadow:0 0 40px ${rc},0 0 80px ${rc}66`;
+    this.dom.rankText.textContent = grade;
+    this.dom.rankText.style.cssText = `color:${rc};text-shadow:0 0 40px ${rc},0 0 80px ${rc}66;animation:gradeEntrance 0.8s cubic-bezier(0.175,0.885,0.32,1.275) both`;
 
     // Accuracy
     this.dom.accText.textContent = acc + '% ACCURACY';
 
     // Song name
-    this.dom.songPlayed.textContent = this.gd.song.title;
+    this.dom.songPlayed.textContent = song.title;
 
-    // Score
-    this.dom.scoreText.textContent = score.toLocaleString();
-    this.dom.scoreText.style.cssText = `font-size:30px;font-weight:bold;margin-bottom:30px;background:linear-gradient(180deg,#fff,${rc});-webkit-background-clip:text;-webkit-text-fill-color:transparent`;
+    // New high score banner
+    this.dom.newHighScore.classList.toggle('visible', isNewHigh);
+
+    // Score with counting animation
+    this.dom.scoreText.textContent = '0';
+    this.dom.scoreText.style.cssText = `background:linear-gradient(180deg,#fff,${rc});-webkit-background-clip:text;-webkit-text-fill-color:transparent`;
+    this._animateScoreCount(score, 1500);
 
     // Stats grid
     const statItems = [
-      ['PERFECT', '#00ffff'], ['GREAT', '#ff00ff'],
-      ['GOOD', '#00ff66'], ['MISS', '#ff2244'],
+      ['PERFECT', '#ffd700'], ['GREAT', '#00f0ff'],
+      ['GOOD', '#00ff88'], ['MISS', '#ff4466'],
     ];
     this.dom.statsGrid.innerHTML = statItems.map(([k, c]) =>
-      `<span style="color:${c};text-shadow:0 0 8px ${c}55">${k}</span><span style="text-align:right">${stats[k.toLowerCase()]}</span>`
+      `<span style="color:${c};text-shadow:0 0 8px ${c}44">${k}</span><span style="text-align:right">${stats[k.toLowerCase()]}</span>`
     ).join('') + `<span style="color:#ffaa00;margin-top:10px">MAX COMBO</span><span style="text-align:right;margin-top:10px">${maxCombo}x</span>`;
 
     this.showView('results');
     this.bgLoop();
+  }
+
+  _animateScoreCount(target, duration) {
+    const start = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const progress = clamp(elapsed / duration, 0, 1);
+      const eased = easeOutCubic(progress);
+      this.dom.scoreText.textContent = Math.floor(target * eased).toLocaleString();
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   // ── Background Loop ───────────────────────────────────────
