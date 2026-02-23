@@ -64,9 +64,13 @@ canvas { display: block; }
 
 /* ── Lobby Screen ───────────────────────────────────────────── */
 #lobbyScreen {
-  background: rgba(5, 3, 18, 0.88);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: radial-gradient(ellipse at center,
+    rgba(5, 3, 18, 0.45) 0%,
+    rgba(5, 3, 18, 0.62) 55%,
+    rgba(5, 3, 18, 0.80) 100%
+  );
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   justify-content: flex-start;
   padding: 0;
 }
@@ -117,15 +121,23 @@ canvas { display: block; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: rgba(5, 3, 18, 0.35);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
 .lobby-right {
   flex: 2;
   min-width: 0;
-  max-width: 340px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: rgba(5, 3, 18, 0.35);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
 .lobby-section-label {

@@ -54,17 +54,17 @@ for (let i = 0; i < 6; i++) {
 
 // Floating background arrows (lobby decoration)
 const bgArrows = [];
-for (let i = 0; i < 42; i++) {
+for (let i = 0; i < 50; i++) {
   bgArrows.push({
     x0: Math.random(),
     y0: Math.random(),
-    sz: 5 + Math.random() * 32,
+    sz: 8 + Math.random() * 38,
     baseRot: Math.random() * Math.PI * 2,
-    rotSpd: (Math.random() - 0.5) * 0.25,
-    dx: (Math.random() - 0.5) * 0.025,
-    dy: -(0.015 + Math.random() * 0.05),
+    rotSpd: (Math.random() - 0.5) * 0.3,
+    dx: (Math.random() - 0.5) * 0.03,
+    dy: -(0.02 + Math.random() * 0.06),
     lane: Math.floor(Math.random() * 4),
-    alpha: 0.015 + Math.random() * 0.06,
+    alpha: 0.06 + Math.random() * 0.16,
     phase: Math.random() * Math.PI * 2,
     wobble: 0.3 + Math.random() * 0.8,
   });
@@ -338,14 +338,14 @@ export class Renderer {
       const sx = px * W;
       const sy = py * H;
       const rot = a.baseRot + a.rotSpd * ts;
-      const pulse = 0.4 + 0.6 * Math.sin(ts * 1.0 + a.phase);
+      const pulse = 0.5 + 0.5 * Math.sin(ts * 0.8 + a.phase);
 
       ctx.save();
       ctx.globalAlpha = a.alpha * pulse;
       ctx.translate(sx, sy);
       ctx.rotate(rot);
 
-      if (a.sz < 14) {
+      if (a.sz < 16) {
         this._arrowPathSmall(ctx, a.sz);
       } else {
         this._arrowPath(ctx, a.sz);
@@ -353,13 +353,13 @@ export class Renderer {
 
       ctx.fillStyle = COLS[a.lane];
       ctx.shadowColor = COLS[a.lane];
-      ctx.shadowBlur = a.sz * 0.5;
+      ctx.shadowBlur = a.sz * 0.8 + 6;
       ctx.fill();
 
-      // Faint edge
+      // Glass edge highlight
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = COLS[a.lane] + '18';
+      ctx.lineWidth = 0.8;
       ctx.stroke();
 
       ctx.restore();
