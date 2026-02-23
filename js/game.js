@@ -43,12 +43,12 @@ export class Game {
     this.dom = {
       bgCv: document.getElementById('bgCv'),
       gameCv: document.getElementById('gameCv'),
-      menuScreen: document.getElementById('menuScreen'),
-      songSelectScreen: document.getElementById('songSelectScreen'),
+      lobbyScreen: document.getElementById('lobbyScreen'),
       loadingScreen: document.getElementById('loadingScreen'),
       resultsScreen: document.getElementById('resultsScreen'),
       touchBar: document.getElementById('touchBar'),
       songList: document.getElementById('songList'),
+      bestRunsList: document.getElementById('bestRunsList'),
       loadingBar: document.getElementById('loadingBar'),
       loadingText: document.getElementById('loadingText'),
       loadingSongName: document.getElementById('loadingSongName'),
@@ -75,18 +75,17 @@ export class Game {
     this.input.setupTouchButtons(this.dom.touchBar, lane => this.tryHit(lane));
 
     // Button events
-    document.getElementById('startBtn').addEventListener('click', () => this.showSongSelect());
     document.getElementById('retryBtn').addEventListener('click', () => this._retrySong());
-    document.getElementById('trackSelectBtn').addEventListener('click', () => this.showSongSelect());
-    document.getElementById('backBtn').addEventListener('click', () => this.showMenu());
+    document.getElementById('trackSelectBtn').addEventListener('click', () => this.showLobby());
     document.getElementById('resumeBtn').addEventListener('click', () => this.resumeGame());
     document.getElementById('pauseQuitBtn').addEventListener('click', () => this._quitToTracks());
 
-    // Build song list
+    // Build lobby
     this.buildSongList();
+    this.buildBestRuns();
 
-    // Show menu
-    this.showMenu();
+    // Show lobby
+    this.showLobby();
 
     // Start background render loop
     this.bgLoop();
@@ -97,8 +96,7 @@ export class Game {
   showView(view) {
     this.state = view;
     const screens = {
-      menu: this.dom.menuScreen,
-      songSelect: this.dom.songSelectScreen,
+      lobby: this.dom.lobbyScreen,
       loading: this.dom.loadingScreen,
       results: this.dom.resultsScreen,
     };
@@ -126,11 +124,11 @@ export class Game {
   }
 
   _configureInput(view) {
-    if (view === 'songSelect') {
+    if (view === 'lobby') {
       this.input.onHit = null;
       this.input.onNav = dir => this.navigateSongs(dir);
       this.input.onSelect = () => this.selectSong(this.selectedSong);
-      this.input.onBack = () => this.showMenu();
+      this.input.onBack = null;
     } else if (view === 'playing') {
       this.input.onNav = null;
       this.input.onHit = lane => this.tryHit(lane);
@@ -140,23 +138,19 @@ export class Game {
       this.input.onNav = null;
       this.input.onHit = null;
       this.input.onSelect = () => this._retrySong();
-      this.input.onBack = () => this.showSongSelect();
+      this.input.onBack = () => this.showLobby();
     } else {
       this.input.onNav = null;
       this.input.onHit = null;
-      this.input.onSelect = () => this.showSongSelect();
+      this.input.onSelect = null;
       this.input.onBack = null;
     }
   }
 
-  showMenu() {
-    this.showView('menu');
-    this.bgLoop();
-  }
-
-  showSongSelect() {
-    this.buildSongList(); // refresh to show updated high scores
-    this.showView('songSelect');
+  showLobby() {
+    this.buildSongList();
+    this.buildBestRuns();
+    this.showView('lobby');
     this.highlightSong(this.selectedSong);
     this.bgLoop();
   }
@@ -201,6 +195,45 @@ export class Game {
       card.addEventListener('click', () => this.selectSong(i));
       card.addEventListener('mouseenter', () => this.highlightSong(i));
       this.dom.songList.appendChild(card);
+    });
+  }
+
+  buildBestRuns() {
+    const allScores = loadAllScores();
+    const entries = Object.entries(allScores)
+      .sort((a, b) => b[1].score - a[1].score);
+
+    if (!entries.length) {
+      this.dom.bestRunsList.innerHTML =
+        '<div class="best-run-empty">NO RUNS YET<br>PLAY A TRACK TO BEGIN</div>';
+      return;
+    }
+
+    this.dom.bestRunsList.innerHTML = entries.map(([title, rec], i) => {
+      const gc = GRADE_COLORS[rec.grade] || '#556677';
+      const songIdx = SONGS.findIndex(s => s.title === title);
+      return `
+        <div class="best-run-card" data-song="${songIdx}">
+          <div class="best-run-rank">${i + 1}</div>
+          <div class="best-run-grade" style="color:${gc};text-shadow:0 0 10px ${gc}55">${rec.grade}</div>
+          <div class="best-run-info">
+            <div class="best-run-title">${title}</div>
+            <div class="best-run-score">${rec.score.toLocaleString()}</div>
+          </div>
+          <div class="best-run-acc">${rec.accuracy}%</div>
+        </div>`;
+    }).join('');
+
+    // Clicking a best run card jumps to that song in the list
+    this.dom.bestRunsList.querySelectorAll('.best-run-card').forEach(card => {
+      const idx = parseInt(card.dataset.song);
+      if (idx >= 0) {
+        card.addEventListener('click', () => {
+          this.highlightSong(idx);
+          const cards = this.dom.songList.querySelectorAll('.song-card');
+          if (cards[idx]) cards[idx].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+      }
     });
   }
 
@@ -253,7 +286,7 @@ export class Game {
       this.dom.loadingText.textContent = 'LOAD FAILED \u2014 TAP OR PRESS ANY KEY';
       const goBack = () => {
         window.removeEventListener('keydown', goBack);
-        this.showSongSelect();
+        this.showLobby();
       };
       this.dom.loadingScreen.addEventListener('click', goBack, { once: true });
       window.addEventListener('keydown', goBack, { once: true });
@@ -312,8 +345,7 @@ export class Game {
       this.audio.ctx.resume();
     }
     cancelAnimationFrame(this._gameAF);
-    this.showSongSelect();
-    this.bgLoop();
+    this.showLobby();
   }
 
   _retrySong() {
