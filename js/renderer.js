@@ -634,9 +634,9 @@ export class Renderer {
       let p = (elapsed - n.t + travelTime) / travelTime;
       if (p < -0.05 || p > 1.15) continue;
 
-      // Smooth cubic perspective curve (buttery acceleration)
+      // Accelerating perspective curve (notes speed up toward hit zone — feels on-beat)
       const cp = clamp(p, 0, 1);
-      const pp = cp * cp * (3 - 2 * cp); // smoothstep for silky motion
+      const pp = cp * cp; // quadratic ease-in: accelerates into hit zone
       const y = vy + hl * pp;
       const w = lerp(tw, bw, pp);
       const lw = (w * 2) / 4;
