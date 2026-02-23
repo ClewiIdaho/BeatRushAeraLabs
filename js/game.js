@@ -27,6 +27,7 @@ export class Game {
     this.selectedSong = 0;
     this.paused = false;
     this.pauseTime = 0;
+    this.isTouchDevice = false;
 
     // Gameplay data
     this.gd = null;
@@ -70,6 +71,14 @@ export class Game {
       if (this.state === 'playing') this.renderer.resize(this.dom.gameCv);
     });
 
+    // Detect touch device
+    this.isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+    // Prevent scroll/bounce during gameplay on mobile
+    document.addEventListener('touchmove', e => {
+      if (this.state === 'playing') e.preventDefault();
+    }, { passive: false });
+
     // Input setup
     this.input.init();
     this.input.setupTouchButtons(this.dom.touchBar, lane => this.tryHit(lane));
@@ -108,7 +117,8 @@ export class Game {
 
     // Game canvas
     this.dom.gameCv.classList.toggle('visible', view === 'playing');
-    this.dom.touchBar.style.display = view === 'playing' ? 'flex' : 'none';
+    // Show touch bar on touch devices during gameplay
+    this.dom.touchBar.style.display = (view === 'playing' && this.isTouchDevice) ? 'flex' : 'none';
 
     // Cursor management
     document.body.classList.toggle('gameplay-active', view === 'playing');
@@ -436,11 +446,14 @@ export class Game {
 
       this.audio.playHit(lane, judg);
 
-      // Compute note position for effects
+      // Compute note position for effects (must match renderer highway)
       const dpr = window.devicePixelRatio || 1;
       const W = this.dom.gameCv.width / dpr;
       const H = this.dom.gameCv.height / dpr;
-      const cx = W / 2, hy = H * 0.82, bw = W * 0.28;
+      const isMobile = W < 600;
+      const cx = W / 2;
+      const hy = this.isTouchDevice ? H * 0.72 : H * 0.82;
+      const bw = W * (isMobile ? 0.38 : 0.28);
       const lw = (bw * 2) / 4;
       const px = cx - bw + lane * lw + lw / 2;
 
