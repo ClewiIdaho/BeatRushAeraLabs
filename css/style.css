@@ -1,0 +1,221 @@
+/* ── Beat Rush – Styles ──────────────────────────────────────── */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: #010008; font-family: monospace; color: #fff;
+}
+canvas { display: block; }
+
+/* ── Shared screen overlay ─────────────────────────────────── */
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 2;
+}
+.hide { display: none !important; }
+
+/* ── Background canvas ─────────────────────────────────────── */
+.bg-cv { position: absolute; inset: 0; z-index: 0; }
+
+/* ── Menu Screen ───────────────────────────────────────────── */
+.title {
+  font-size: clamp(42px, 10vw, 78px); font-weight: bold;
+  letter-spacing: 12px; margin-bottom: 6px;
+  background: linear-gradient(180deg, #fff 0%, #0ff 50%, #f0f 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 30px rgba(0,255,255,.5)) drop-shadow(0 0 60px rgba(255,0,255,.3));
+}
+.sub {
+  font-size: 11px; letter-spacing: 7px; margin-bottom: 56px;
+  background: linear-gradient(90deg, #0ff, #f0f, #0f6);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 8px rgba(255,0,255,.4));
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn {
+  background: linear-gradient(180deg, rgba(0,255,255,.18), rgba(255,0,255,.08));
+  border: 1.5px solid rgba(0,255,255,.5);
+  color: #0ff; font-size: 20px; padding: 16px 60px;
+  letter-spacing: 10px; cursor: pointer; font-family: monospace;
+  border-radius: 8px;
+  text-shadow: 0 0 15px #0ff;
+  box-shadow: 0 0 30px rgba(0,255,255,.3), 0 0 60px rgba(255,0,255,.15), inset 0 1px 0 rgba(255,255,255,.2);
+  transition: all .3s;
+}
+.btn:hover {
+  background: linear-gradient(180deg, rgba(0,255,255,.35), rgba(255,0,255,.18));
+  box-shadow: 0 0 50px rgba(0,255,255,.5), 0 0 80px rgba(255,0,255,.25), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.btn2 {
+  background: linear-gradient(180deg, rgba(255,0,255,.18), rgba(0,255,255,.08));
+  border: 1.5px solid rgba(255,0,255,.5);
+  color: #f0f; font-size: 15px; border-radius: 8px;
+  padding: 14px 48px; letter-spacing: 7px; cursor: pointer;
+  font-family: monospace; text-shadow: 0 0 12px #f0f;
+  box-shadow: 0 0 25px rgba(255,0,255,.3);
+  transition: all .3s;
+}
+.btn2:hover {
+  background: linear-gradient(180deg, rgba(255,0,255,.35), rgba(0,255,255,.15));
+}
+
+/* ── Key Hints ─────────────────────────────────────────────── */
+.keys { margin-top: 48px; display: flex; gap: 22px; font-size: 12px; }
+.hint { margin-top: 14px; font-size: 9px; color: #556; letter-spacing: 4px; }
+
+/* ── Results Screen ────────────────────────────────────────── */
+.rank { font-size: 88px; font-weight: bold; line-height: 1; margin-bottom: 6px; }
+.stats { display: grid; grid-template-columns: auto auto; gap: 8px 36px; font-size: 13px; margin-bottom: 36px; }
+
+/* ── Touch Bar ─────────────────────────────────────────────── */
+.touch-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 8px;
+  padding: 10px 8px 14px;
+  background: linear-gradient(transparent, rgba(1,0,8,.95));
+  z-index: 3;
+}
+.tbtn {
+  width: 62px; height: 54px; border-radius: 10px; font-size: 22px;
+  font-family: monospace; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none; -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Song Select Screen ────────────────────────────────────── */
+#songSelectScreen {
+  background: rgba(1, 0, 8, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 20px;
+}
+
+.screen-header {
+  width: 100%; max-width: 600px;
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 24px;
+}
+
+.back-btn {
+  background: none; border: 1px solid rgba(255,255,255,.15);
+  color: #889; font-size: 12px; padding: 8px 16px;
+  border-radius: 6px; cursor: pointer; font-family: monospace;
+  letter-spacing: 2px; transition: all .3s;
+}
+.back-btn:hover { color: #0ff; border-color: rgba(0,255,255,.4); }
+
+.screen-title {
+  font-size: clamp(18px, 4vw, 28px); font-weight: bold;
+  letter-spacing: 8px;
+  background: linear-gradient(90deg, #0ff, #f0f);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgba(0,255,255,.3));
+}
+
+.song-list {
+  width: 100%; max-width: 600px;
+  max-height: 60vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,255,255,.2) transparent;
+}
+.song-list::-webkit-scrollbar { width: 4px; }
+.song-list::-webkit-scrollbar-thumb { background: rgba(0,255,255,.25); border-radius: 2px; }
+.song-list::-webkit-scrollbar-track { background: transparent; }
+
+.song-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(15,8,40,.8), rgba(8,4,25,.9));
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px; cursor: pointer;
+  transition: all .25s;
+}
+.song-card:hover {
+  background: linear-gradient(135deg, rgba(25,12,60,.9), rgba(15,8,40,.95));
+  border-color: rgba(0,255,255,.2);
+  box-shadow: 0 0 20px rgba(0,255,255,.08);
+  transform: translateX(4px);
+}
+.song-card.selected {
+  background: linear-gradient(135deg, rgba(0,40,50,.6), rgba(20,8,50,.8));
+  border-color: rgba(0,255,255,.5);
+  box-shadow: 0 0 30px rgba(0,255,255,.15), inset 0 0 30px rgba(0,255,255,.04);
+  transform: translateX(8px);
+}
+
+.song-card-left { flex: 1; }
+.song-title {
+  font-size: 14px; font-weight: bold; letter-spacing: 1px;
+  color: #eef; margin-bottom: 3px;
+}
+.song-card.selected .song-title { color: #0ff; text-shadow: 0 0 8px rgba(0,255,255,.4); }
+.song-meta { font-size: 10px; color: #556; letter-spacing: 2px; }
+
+.song-card-right { text-align: right; }
+.song-bpm { font-size: 18px; font-weight: bold; color: #aab; }
+.bpm-label { font-size: 9px; color: #556; letter-spacing: 2px; }
+.song-difficulty { font-size: 12px; letter-spacing: 1px; }
+.song-diff-label { font-size: 8px; letter-spacing: 3px; margin-top: 2px; }
+
+.song-select-footer {
+  margin-top: 18px;
+  font-size: 9px; color: #445; letter-spacing: 4px;
+}
+
+/* ── Loading Screen ────────────────────────────────────────── */
+#loadingScreen {
+  background: rgba(1, 0, 8, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.loading-title {
+  font-size: 14px; letter-spacing: 10px; color: #556; margin-bottom: 16px;
+}
+.loading-song-name {
+  font-size: clamp(20px, 5vw, 32px); font-weight: bold;
+  letter-spacing: 4px; margin-bottom: 40px;
+  background: linear-gradient(90deg, #0ff, #f0f);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+.loading-bar-outer {
+  width: 280px; height: 6px;
+  background: rgba(255,255,255,.05);
+  border-radius: 3px; overflow: hidden;
+  margin-bottom: 14px;
+}
+.loading-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #0ff, #f0f);
+  border-radius: 3px;
+  box-shadow: 0 0 12px rgba(0,255,255,.4);
+  transition: width .15s;
+}
+.loading-text {
+  font-size: 11px; letter-spacing: 4px; color: #667;
+}
+
+/* ── Results Screen ────────────────────────────────────────── */
+#resultsScreen {
+  background: rgba(1, 0, 8, 0.88);
+  backdrop-filter: blur(8px);
+}
+.results-label {
+  font-size: 13px; letter-spacing: 8px; color: #667; margin-bottom: 16px;
+}
+.song-played {
+  font-size: 12px; letter-spacing: 3px; color: #889; margin-bottom: 28px;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .song-card { padding: 10px 12px; }
+  .song-title { font-size: 12px; }
+  .song-bpm { font-size: 15px; }
+  .btn { padding: 14px 40px; font-size: 17px; }
+  .screen-header { padding: 0 8px; }
+}
