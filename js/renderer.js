@@ -52,21 +52,27 @@ for (let i = 0; i < 6; i++) {
   });
 }
 
-// Floating background arrows (lobby decoration)
+// Floating background arrows (lobby decoration) — many arrows, all directions
 const bgArrows = [];
-for (let i = 0; i < 50; i++) {
+for (let i = 0; i < 90; i++) {
+  // Random direction: up, down, left, right, diagonals
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 0.012 + Math.random() * 0.055;
   bgArrows.push({
     x0: Math.random(),
     y0: Math.random(),
-    sz: 8 + Math.random() * 38,
+    sz: 5 + Math.random() * 42,
     baseRot: Math.random() * Math.PI * 2,
-    rotSpd: (Math.random() - 0.5) * 0.3,
-    dx: (Math.random() - 0.5) * 0.03,
-    dy: -(0.02 + Math.random() * 0.06),
+    rotSpd: (Math.random() - 0.5) * 0.4,
+    dx: Math.cos(angle) * speed,
+    dy: Math.sin(angle) * speed,
     lane: Math.floor(Math.random() * 4),
-    alpha: 0.06 + Math.random() * 0.16,
+    alpha: 0.04 + Math.random() * 0.18,
     phase: Math.random() * Math.PI * 2,
-    wobble: 0.3 + Math.random() * 0.8,
+    wobbleX: 0.3 + Math.random() * 1.2,
+    wobbleY: 0.2 + Math.random() * 0.8,
+    wobbleSpd: 0.2 + Math.random() * 0.6,
+    pulseSpd: 0.4 + Math.random() * 1.2,
   });
 }
 
@@ -359,39 +365,72 @@ export class Renderer {
   drawFloatingArrows(ctx, W, H, t) {
     const ts = t * 0.001;
     for (const a of bgArrows) {
-      // Linear drift + gentle sine wobble, wrapped
-      let px = a.x0 + a.dx * ts + Math.sin(ts * 0.4 + a.phase) * 0.015 * a.wobble;
-      let py = a.y0 + a.dy * ts + Math.cos(ts * 0.25 + a.phase * 1.7) * 0.008;
+      // Smooth multi-axis drift with sine wobble in all directions
+      let px = a.x0 + a.dx * ts
+        + Math.sin(ts * a.wobbleSpd * 0.35 + a.phase) * 0.02 * a.wobbleX
+        + Math.sin(ts * 0.13 + a.phase * 2.3) * 0.008;
+      let py = a.y0 + a.dy * ts
+        + Math.cos(ts * a.wobbleSpd * 0.28 + a.phase * 1.7) * 0.015 * a.wobbleY
+        + Math.cos(ts * 0.09 + a.phase * 3.1) * 0.006;
 
-      // Wrap so arrows loop endlessly
-      px = ((px % 1.4) + 1.4) % 1.4 - 0.2;
-      py = ((py % 1.4) + 1.4) % 1.4 - 0.2;
+      // Wrap seamlessly (larger range for offscreen buffer)
+      px = ((px % 1.6) + 1.6) % 1.6 - 0.3;
+      py = ((py % 1.6) + 1.6) % 1.6 - 0.3;
 
       const sx = px * W;
       const sy = py * H;
-      const rot = a.baseRot + a.rotSpd * ts;
-      const pulse = 0.5 + 0.5 * Math.sin(ts * 0.8 + a.phase);
+
+      // Smooth rotation drift
+      const rot = a.baseRot + a.rotSpd * ts + Math.sin(ts * 0.15 + a.phase) * 0.3;
+
+      // Smooth breathing pulse (sine³ for softer curve)
+      const rawPulse = Math.sin(ts * a.pulseSpd * 0.5 + a.phase);
+      const pulse = 0.45 + 0.55 * rawPulse * rawPulse * Math.sign(rawPulse + 0.001);
+
+      // Depth-based size breathing
+      const breathe = 1 + Math.sin(ts * 0.3 + a.phase * 2) * 0.06;
+      const sz = a.sz * breathe;
 
       ctx.save();
       ctx.globalAlpha = a.alpha * pulse;
       ctx.translate(sx, sy);
       ctx.rotate(rot);
 
-      if (a.sz < 16) {
-        this._arrowPathSmall(ctx, a.sz);
+      if (sz < 14) {
+        this._arrowPathSmall(ctx, sz);
       } else {
-        this._arrowPath(ctx, a.sz);
+        this._arrowPath(ctx, sz);
       }
 
-      ctx.fillStyle = COLS[a.lane];
-      ctx.shadowColor = COLS[a.lane];
-      ctx.shadowBlur = a.sz * 0.8 + 6;
+      // Gradient fill for depth
+      const c = COLS[a.lane];
+      const hw = sz * 0.4;
+      const g = ctx.createLinearGradient(-hw, -hw, hw, hw);
+      g.addColorStop(0, COLS2[a.lane]);
+      g.addColorStop(0.5, c);
+      g.addColorStop(1, COLS2[a.lane]);
+      ctx.fillStyle = g;
+      ctx.shadowColor = c;
+      ctx.shadowBlur = sz * 0.6 + 8;
       ctx.fill();
 
-      // Glass edge highlight
+      // Glass highlight on larger arrows
+      if (sz >= 18) {
+        ctx.save();
+        ctx.clip();
+        const hl = ctx.createLinearGradient(0, -sz / 2, 0, sz * 0.1);
+        hl.addColorStop(0, 'rgba(255,255,255,0.25)');
+        hl.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+        hl.addColorStop(1, 'transparent');
+        ctx.fillStyle = hl;
+        ctx.fillRect(-sz, -sz, sz * 2, sz);
+        ctx.restore();
+      }
+
+      // Soft border
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = COLS[a.lane] + '18';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = c + '20';
+      ctx.lineWidth = 0.7;
       ctx.stroke();
 
       ctx.restore();
@@ -534,17 +573,18 @@ export class Renderer {
       }
     }
 
-    // Flowing grid lines (perspective speed effect)
-    for (let i = 0; i < 30; i++) {
-      let p = ((t * 0.00042 + i / 30) % 1);
-      const pp = Math.pow(p, 1.8);
+    // Flowing grid lines (perspective speed effect, smoother spacing)
+    for (let i = 0; i < 35; i++) {
+      let p = ((t * 0.00038 + i / 35) % 1);
+      // Smoothstep for silkier distribution
+      const pp = p * p * (3 - 2 * p);
       const y = vy + hl * pp;
       const w = lerp(tw, bw, pp);
       ctx.beginPath();
       ctx.moveTo(cx - w, y);
       ctx.lineTo(cx + w, y);
-      ctx.strokeStyle = hsl(260, 60, 50, 0.015 + pp * 0.07);
-      ctx.lineWidth = 0.4 + pp * 0.8;
+      ctx.strokeStyle = hsl(260, 60, 50, 0.012 + pp * 0.065);
+      ctx.lineWidth = 0.3 + pp * 0.9;
       ctx.stroke();
     }
 
@@ -594,29 +634,37 @@ export class Renderer {
       let p = (elapsed - n.t + travelTime) / travelTime;
       if (p < -0.05 || p > 1.15) continue;
 
-      const pp = Math.pow(clamp(p, 0, 1), 1.5);
+      // Smooth cubic perspective curve (buttery acceleration)
+      const cp = clamp(p, 0, 1);
+      const pp = cp * cp * (3 - 2 * cp); // smoothstep for silky motion
       const y = vy + hl * pp;
       const w = lerp(tw, bw, pp);
       const lw = (w * 2) / 4;
       const nx = cx - w + n.lane * lw + lw / 2;
       const sz = 14 + 32 * pp;
 
-      // Glow intensifies as note approaches hit zone
-      const glowI = Math.pow(pp, 2);
+      // Glow intensifies smoothly as note approaches hit zone
+      const glowI = pp * pp;
 
       ctx.save();
-      ctx.globalAlpha = Math.min(1, p * 3.5);
+      // Smooth fade-in with cubic ease
+      const fadeIn = clamp(p * 4, 0, 1);
+      ctx.globalAlpha = fadeIn * fadeIn * (3 - 2 * fadeIn);
 
-      // Note trail (light streak behind the arrow)
-      if (pp > 0.1) {
+      // Note trail (soft gradient streak)
+      if (pp > 0.08) {
         ctx.save();
-        ctx.globalAlpha = pp * 0.28;
-        const tg = ctx.createLinearGradient(0, y - 50 * pp, 0, y);
+        const trailAlpha = pp * pp * 0.35;
+        ctx.globalAlpha = trailAlpha;
+        const trailLen = 60 * pp;
+        const tg = ctx.createLinearGradient(0, y - trailLen, 0, y);
         tg.addColorStop(0, 'transparent');
-        tg.addColorStop(0.7, COLS[n.lane] + '44');
+        tg.addColorStop(0.5, COLS[n.lane] + '22');
+        tg.addColorStop(0.85, COLS[n.lane] + '66');
         tg.addColorStop(1, COLS[n.lane]);
         ctx.fillStyle = tg;
-        ctx.fillRect(nx - 4 * pp, y - 50 * pp, 8 * pp, 50 * pp);
+        const trailW = 4.5 * pp;
+        ctx.fillRect(nx - trailW, y - trailLen, trailW * 2, trailLen);
         ctx.restore();
       }
 
@@ -637,16 +685,30 @@ export class Renderer {
 
       this.drawTargetArrow(ctx, tx, hy, i, fl, t);
 
-      // Full lane beam on flash
-      if (fl > 0.05) {
+      // Full lane beam on flash (wider, smoother fade)
+      if (fl > 0.02) {
+        const beamAlpha = fl * fl * 0.2; // quadratic fade for smoothness
+        const beamW = 8 + fl * 6;
         ctx.save();
-        ctx.globalAlpha = fl * 0.15;
+        ctx.globalAlpha = beamAlpha;
         const bm = ctx.createLinearGradient(0, vy, 0, hy);
         bm.addColorStop(0, 'transparent');
-        bm.addColorStop(0.6, COLS[i]);
+        bm.addColorStop(0.4, 'transparent');
+        bm.addColorStop(0.75, COLS[i] + '88');
         bm.addColorStop(1, COLS[i]);
         ctx.fillStyle = bm;
-        ctx.fillRect(tx - 5, vy, 10, hl);
+        ctx.fillRect(tx - beamW / 2, vy, beamW, hl);
+        ctx.restore();
+
+        // Soft glow halo at hit zone
+        ctx.save();
+        ctx.globalAlpha = fl * fl * 0.4;
+        const halo = ctx.createRadialGradient(tx, hy, 0, tx, hy, 30 + fl * 20);
+        halo.addColorStop(0, COLS[i] + '44');
+        halo.addColorStop(0.5, COLS[i] + '11');
+        halo.addColorStop(1, 'transparent');
+        ctx.fillStyle = halo;
+        ctx.fillRect(tx - 50, hy - 50, 100, 100);
         ctx.restore();
       }
     }
@@ -655,21 +717,31 @@ export class Renderer {
   // ── Judgment Text ─────────────────────────────────────────
 
   drawJudgment(ctx, judg, judgTime, now, cx, hy) {
-    if (!judg || now - judgTime > 700) return;
-    const a = (now - judgTime) / 700;
+    if (!judg || now - judgTime > 800) return;
+    const t = (now - judgTime) / 800;
     const colors = { PERFECT: '#ffd700', GREAT: '#00f0ff', GOOD: '#00ff88', MISS: '#ff4466' };
-    const scale = 1 + (1 - a) * 0.5;
+
+    // Smooth easeOutBack for scale (overshoot then settle)
+    const scaleT = Math.min(t * 4, 1); // quick scale-in over first 200ms
+    const easeBack = 1 + (2.7 * (scaleT - 1) * (scaleT - 1) * (scaleT - 1) + 2.7 * (scaleT - 1) * (scaleT - 1));
+    const scale = 0.6 + 0.55 * (scaleT < 1 ? easeBack : 1);
+
+    // Smooth cubic fade-out
+    const fadeOut = 1 - t * t * t;
+
+    // Smooth float upward with deceleration
+    const floatUp = t * (2 - t) * 32; // ease-out quadratic
 
     ctx.save();
-    ctx.globalAlpha = 1 - a * a;
-    ctx.translate(cx, hy + 48 - a * 28);
+    ctx.globalAlpha = fadeOut;
+    ctx.translate(cx, hy + 48 - floatUp);
     ctx.scale(scale, scale);
     ctx.fillStyle = colors[judg] || '#fff';
     ctx.font = "bold 24px 'Orbitron', monospace";
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = colors[judg] || '#fff';
-    ctx.shadowBlur = 28;
+    ctx.shadowBlur = 24 + (1 - t) * 16;
     ctx.fillText(judg, 0, 0);
     ctx.restore();
   }
@@ -679,9 +751,10 @@ export class Renderer {
   drawHUD(ctx, W, H, state, hw) {
     const { cx, hy, bw } = hw;
 
-    // Smooth score interpolation
+    // Butter-smooth score interpolation (faster catch-up for big jumps)
     const scoreDiff = state.score - this._displayScore;
-    this._displayScore += scoreDiff * 0.12;
+    const catchUp = Math.abs(scoreDiff) > 500 ? 0.18 : Math.abs(scoreDiff) > 100 ? 0.14 : 0.08;
+    this._displayScore += scoreDiff * catchUp;
     if (Math.abs(scoreDiff) < 1) this._displayScore = state.score;
     const displayScore = Math.round(this._displayScore);
 
