@@ -76,14 +76,27 @@ export class InputManager {
       btn.className = 'tbtn';
       btn.textContent = arrows[i];
       btn.style.cssText = `
-        border: 1.5px solid ${colors[i]}44;
-        background: linear-gradient(180deg, ${colors[i]}1a, ${colors[i]}08);
+        border: 2px solid ${colors[i]}55;
+        background: linear-gradient(180deg, ${colors[i]}22, ${colors[i]}0a);
         color: ${colors[i]};
-        text-shadow: 0 0 12px ${colors[i]};
-        box-shadow: 0 0 15px ${colors[i]}22;
+        text-shadow: 0 0 16px ${colors[i]};
+        box-shadow: 0 0 20px ${colors[i]}33, inset 0 1px 0 rgba(255,255,255,0.08);
       `;
-      btn.addEventListener('touchstart', e => { e.preventDefault(); callback(i); });
-      btn.addEventListener('mousedown', () => callback(i));
+      // Touch events with visual feedback
+      btn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        btn.classList.add('pressed');
+        callback(i);
+      });
+      btn.addEventListener('touchend', () => btn.classList.remove('pressed'));
+      btn.addEventListener('touchcancel', () => btn.classList.remove('pressed'));
+      // Mouse fallback
+      btn.addEventListener('mousedown', () => {
+        btn.classList.add('pressed');
+        callback(i);
+      });
+      btn.addEventListener('mouseup', () => btn.classList.remove('pressed'));
+      btn.addEventListener('mouseleave', () => btn.classList.remove('pressed'));
       container.appendChild(btn);
     }
   }

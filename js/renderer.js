@@ -473,10 +473,14 @@ export class Renderer {
 
   drawHighway(ctx, W, H, t, beatPulse, energy, effects) {
     const cx = W / 2;
+    const isMobile = W < 600;
+    const hasTouchBar = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const vy = H * 0.04;
-    const hy = H * 0.82;
-    const tw = W * 0.04;
-    const bw = W * 0.28;
+    // Pull hit zone up on touch devices to leave room for touch buttons
+    const hy = hasTouchBar ? H * 0.72 : H * 0.82;
+    // Wider highway on mobile for bigger tap targets
+    const tw = W * (isMobile ? 0.06 : 0.04);
+    const bw = W * (isMobile ? 0.38 : 0.28);
     const hl = hy - vy;
     const bp = beatPulse;
     const bassE = energy.bass || 0;
@@ -741,6 +745,8 @@ export class Renderer {
     if (!judg || now - judgTime > 800) return;
     const t = (now - judgTime) / 800;
     const colors = { PERFECT: '#ffd700', GREAT: '#00f0ff', GOOD: '#00ff88', MISS: '#ff4466' };
+    const W = ctx.canvas.width / (window.devicePixelRatio || 1);
+    const fontSize = W < 500 ? Math.round(20 * (W / 500)) : 24;
 
     // Smooth easeOutBack for scale (overshoot then settle)
     const scaleT = Math.min(t * 4, 1); // quick scale-in over first 200ms
@@ -758,7 +764,7 @@ export class Renderer {
     ctx.translate(cx, hy + 48 - floatUp);
     ctx.scale(scale, scale);
     ctx.fillStyle = colors[judg] || '#fff';
-    ctx.font = "bold 24px 'Orbitron', monospace";
+    ctx.font = `bold ${fontSize}px 'Orbitron', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = colors[judg] || '#fff';
@@ -772,6 +778,11 @@ export class Renderer {
   drawHUD(ctx, W, H, state, hw) {
     const { cx, hy, bw } = hw;
 
+    // Responsive scale factor for mobile
+    const mob = W < 500;
+    const sc = mob ? W / 500 : 1;
+    const pad = Math.round(16 * sc);
+
     // Butter-smooth score interpolation (faster catch-up for big jumps)
     const scoreDiff = state.score - this._displayScore;
     const catchUp = Math.abs(scoreDiff) > 500 ? 0.18 : Math.abs(scoreDiff) > 100 ? 0.14 : 0.08;
@@ -782,14 +793,14 @@ export class Renderer {
     // Score
     ctx.save();
     ctx.fillStyle = 'rgba(0,240,255,0.45)';
-    ctx.font = "600 9px 'Exo 2', monospace";
+    ctx.font = `600 ${Math.round(9 * sc)}px 'Exo 2', monospace`;
     ctx.textAlign = 'left';
-    ctx.fillText('SCORE', 16, 18);
+    ctx.fillText('SCORE', pad, 18);
     ctx.fillStyle = '#fff';
-    ctx.font = "700 24px 'Orbitron', monospace";
+    ctx.font = `700 ${Math.round(24 * sc)}px 'Orbitron', monospace`;
     ctx.shadowColor = '#00f0ff';
     ctx.shadowBlur = 10;
-    ctx.fillText(displayScore.toLocaleString(), 16, 43);
+    ctx.fillText(displayScore.toLocaleString(), pad, 18 + Math.round(25 * sc));
     ctx.restore();
 
     // Combo
@@ -800,14 +811,14 @@ export class Renderer {
       ctx.save();
       ctx.textAlign = 'right';
       ctx.fillStyle = comboColor + '77';
-      ctx.font = "600 9px 'Exo 2', monospace";
-      ctx.fillText('COMBO', W - 16, 18);
+      ctx.font = `600 ${Math.round(9 * sc)}px 'Exo 2', monospace`;
+      ctx.fillText('COMBO', W - pad, 18);
       ctx.fillStyle = comboColor;
-      const comboFontSz = Math.min(34, 20 + state.combo * 0.25) * comboScale;
-      ctx.font = `700 ${comboFontSz}px 'Orbitron', monospace`;
+      const comboFontSz = Math.min(34, 20 + state.combo * 0.25) * comboScale * sc;
+      ctx.font = `700 ${Math.round(comboFontSz)}px 'Orbitron', monospace`;
       ctx.shadowColor = comboColor;
       ctx.shadowBlur = 14;
-      ctx.fillText(state.combo + 'x', W - 16, 44);
+      ctx.fillText(state.combo + 'x', W - pad, 18 + Math.round(26 * sc));
       ctx.restore();
     }
 
@@ -817,15 +828,15 @@ export class Renderer {
       ctx.save();
       ctx.textAlign = 'right';
       ctx.fillStyle = '#00ff88';
-      ctx.font = "700 11px 'Exo 2', monospace";
+      ctx.font = `700 ${Math.round(11 * sc)}px 'Exo 2', monospace`;
       ctx.shadowColor = '#00ff88';
       ctx.shadowBlur = 8;
-      ctx.fillText(mult + 'x MULT', W - 16, 62);
+      ctx.fillText(mult + 'x MULT', W - pad, 18 + Math.round(44 * sc));
       ctx.restore();
     }
 
-    // Energy bar
-    const hbW = 140, hbH = 7, hbX = cx - 70, hbY = 10;
+    // Energy bar (responsive width)
+    const hbW = Math.round(Math.min(140, W * 0.32)), hbH = 7, hbX = cx - hbW / 2, hbY = 10;
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(hbX, hbY, hbW, hbH, 3.5);
@@ -891,19 +902,22 @@ export class Renderer {
       ctx.restore();
     }
 
-    // Key labels below highway (fade after 8 seconds)
-    const keyFade = state.songElapsed < 6000 ? 1 : state.songElapsed < 8000 ? 1 - (state.songElapsed - 6000) / 2000 : 0;
-    if (keyFade > 0) {
-      ctx.save();
-      ctx.globalAlpha = keyFade * 0.4;
-      ctx.font = "300 9px 'Exo 2', monospace";
-      for (let i = 0; i < 4; i++) {
-        const f = (i + 0.5) / 4;
-        ctx.fillStyle = COLS[i];
-        ctx.textAlign = 'center';
-        ctx.fillText(KEY_LABELS[i], cx - bw + f * bw * 2, hy + 66);
+    // Key labels below highway (fade after 8 seconds) — hide on touch devices
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice) {
+      const keyFade = state.songElapsed < 6000 ? 1 : state.songElapsed < 8000 ? 1 - (state.songElapsed - 6000) / 2000 : 0;
+      if (keyFade > 0) {
+        ctx.save();
+        ctx.globalAlpha = keyFade * 0.4;
+        ctx.font = `300 ${Math.round(9 * sc)}px 'Exo 2', monospace`;
+        for (let i = 0; i < 4; i++) {
+          const f = (i + 0.5) / 4;
+          ctx.fillStyle = COLS[i];
+          ctx.textAlign = 'center';
+          ctx.fillText(KEY_LABELS[i], cx - bw + f * bw * 2, hy + Math.round(66 * sc));
+        }
+        ctx.restore();
       }
-      ctx.restore();
     }
   }
 
@@ -912,10 +926,11 @@ export class Renderer {
   drawSongTitle(ctx, W, title, elapsed) {
     if (elapsed > 5000) return;
     const alpha = elapsed < 3000 ? 1 : 1 - (elapsed - 3000) / 2000;
+    const fontSize = W < 500 ? Math.round(11 * (W / 500) + 2) : 13;
     ctx.save();
     ctx.globalAlpha = alpha * 0.5;
     ctx.fillStyle = '#fff';
-    ctx.font = "700 13px 'Orbitron', monospace";
+    ctx.font = `700 ${fontSize}px 'Orbitron', monospace`;
     ctx.textAlign = 'center';
     ctx.shadowColor = '#00f0ff';
     ctx.shadowBlur = 10;

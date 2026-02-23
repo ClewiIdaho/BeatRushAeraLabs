@@ -27,8 +27,9 @@ html, body {
   background: var(--bg-deep);
   font-family: var(--font-body);
   color: #fff;
+  -webkit-touch-callout: none;
 }
-canvas { display: block; }
+canvas { display: block; touch-action: none; }
 
 /* ── Screen overlays ───────────────────────────────────────── */
 .screen {
@@ -445,20 +446,28 @@ canvas { display: block; }
 /* ── Touch Bar ─────────────────────────────────────────────── */
 .touch-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  display: flex; justify-content: center; gap: 8px;
-  padding: 10px 8px 14px;
-  background: linear-gradient(transparent, rgba(5,3,18,.95));
+  display: flex; justify-content: center; gap: 10px;
+  padding: 12px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, rgba(5,3,18,.97));
   z-index: 5;
 }
 .tbtn {
-  width: 62px; height: 54px;
-  border-radius: var(--radius-sm);
-  font-size: 22px;
+  flex: 1;
+  max-width: 100px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  font-size: 26px;
   font-family: var(--font-heading);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 60ms ease, filter 60ms ease;
+  touch-action: manipulation;
+}
+.tbtn:active, .tbtn.pressed {
+  transform: scale(0.92);
+  filter: brightness(1.5);
 }
 
 /* ── Song List ─────────────────────────────────────────────── */
@@ -656,24 +665,66 @@ canvas { display: block; }
   position: absolute; inset: 0; z-index: 2;
   opacity: 0;
   transition: opacity 300ms ease;
+  touch-action: none;
 }
 #gameCv.visible { opacity: 1; }
 
 /* Cursor management */
 body.gameplay-active { cursor: none; }
 
+/* ── Safe area support ─────────────────────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  html { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+}
+
+/* ── Touch devices ────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  .btn, .btn2, .btn-ghost { min-height: 48px; }
+  .song-card { min-height: 48px; padding: 10px 12px; }
+  .lobby-footer { display: none; }
+  .pause-actions { gap: 16px; }
+  .pause-actions .btn { padding: 16px 56px; font-size: 16px; }
+  .pause-actions .btn-ghost { padding: 14px 36px; font-size: 12px; }
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .results-panel { width: 94%; padding: 32px 28px; }
+  .stats { gap: 6px 28px; font-size: 12px; }
+  .btn-row { flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+  .btn-row .btn2, .btn-row .btn-ghost { width: 100%; text-align: center; }
+}
+
 @media (max-width: 600px) {
   #lobbyScreen { padding: 16px 12px; }
-  .lobby-panel { max-width: none; padding: 10px 12px; border-radius: 14px; }
+  .lobby-panel { max-width: none; padding: 10px 12px; border-radius: 14px; max-height: 55vh; }
   .lobby-title { letter-spacing: 8px; }
+  .lobby-sub { font-size: 8px; letter-spacing: 5px; }
+  .touch-bar { gap: 8px; padding: 10px 8px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .tbtn { height: 58px; font-size: 24px; max-width: 90px; }
 }
 
 @media (max-width: 480px) {
-  .song-card { padding: 6px 10px; }
+  .song-card { padding: 8px 10px; }
   .song-title { font-size: 11px; }
   .song-bpm { font-size: 12px; }
-  .btn { padding: 12px 36px; font-size: 14px; letter-spacing: 6px; }
-  .results-panel { padding: 24px 20px; }
+  .btn { padding: 14px 36px; font-size: 14px; letter-spacing: 6px; }
+  .results-panel { padding: 24px 16px; width: 96%; }
   .rank { font-size: 64px; }
+  .score-text { font-size: 26px; }
+  .results-label { font-size: 10px; letter-spacing: 7px; }
+  .loading-bar-outer { width: 220px; }
+  .touch-bar { gap: 6px; padding: 8px 6px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .tbtn { height: 54px; font-size: 22px; border-radius: var(--radius-sm); }
+}
+
+/* ── Landscape mobile (short viewport) ────────────────────── */
+@media (max-height: 500px) {
+  .lobby-panel { max-height: 60vh; }
+  .lobby-header { margin-bottom: 8px; }
+  .lobby-title { font-size: clamp(24px, 5vw, 40px); }
+  .lobby-sub { margin-top: 4px; }
+  .touch-bar { padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .tbtn { height: 46px; font-size: 20px; }
+  .pause-title { font-size: clamp(24px, 5vw, 36px); margin-bottom: 20px; }
 }
